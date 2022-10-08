@@ -153,3 +153,5 @@ cython_debug/
 google_credentials.json
 captcha_*
 test_*
+*.pickle
+*_cookies

@@ -4,14 +4,15 @@ import shutil
 
 
 def clear_temp_folder():
-    pathname_template = 'rust_mozprofile'
+    pathname_templates = ['rust_mozprofile', 'tmp']
     if platform.system() == 'Linux':
         tempfolder = '/tmp'
     tempfolder_content = os.listdir(tempfolder)
     for element in tempfolder_content:
         element_path = os.path.join(tempfolder, element)
-        if os.path.isdir(element_path) and pathname_template in element:
-            shutil.rmtree(element_path)
+        for template in pathname_templates:
+            if os.path.isdir(element_path) and template in element:
+                shutil.rmtree(element_path)
     print(tempfolder, 'clear.')
 
 
