@@ -13,7 +13,7 @@ def clear_temp_folder():
         for template in pathname_templates:
             if os.path.isdir(element_path) and template in element:
                 shutil.rmtree(element_path)
-    print(tempfolder, 'clear.')
+    print('Temp folder cleared.\n')
 
 
 if __name__ == '__main__':

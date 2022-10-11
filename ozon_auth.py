@@ -1,5 +1,4 @@
 import os
-import pickle
 import subprocess
 from functools import partial
 from random import randrange
@@ -24,7 +23,7 @@ class CaptchaReceived(Exception):
 
 def human_action_delay(floor, ceil):
     delay_time = randrange(int(floor) * 1000, int(ceil) * 1000) / 1000
-    print(delay_time)
+    print(f'{delay_time} sec.')
     sleep(delay_time)
 
 
@@ -36,7 +35,7 @@ def prepare_webdriver(profile_path):
     profile.update_preferences()
     desired = DesiredCapabilities.FIREFOX
     options = Options()
-    options.add_argument('--headless')
+    # options.add_argument('--headless')
     driver = webdriver.Firefox(
         firefox_profile=profile,
         desired_capabilities=desired,
@@ -46,11 +45,13 @@ def prepare_webdriver(profile_path):
 
 
 def pass_to_main_page(driver, ozon_url):
+    print('Pass to main page.')
     url = ozon_url
     driver.get(url)
 
 
 def push_main_page_enter_button(driver):
+    print('Push main page enter button.')
     enter_button = driver.find_element(
         By.XPATH,
         '//div[3]/a',
@@ -59,6 +60,7 @@ def push_main_page_enter_button(driver):
 
 
 def push_enter_ozon_id_button(driver):
+    print('Push enter ozon id button.')
     enter_button = driver.find_element(
         By.XPATH,
         '//button[1]',
@@ -67,6 +69,7 @@ def push_enter_ozon_id_button(driver):
 
 
 def push_use_email_button(driver):
+    print('Push use email button.')
     try_email_button = driver.find_element(
         By.XPATH,
         '//div[8]/a',
@@ -75,6 +78,7 @@ def push_use_email_button(driver):
 
 
 def enter_email(driver, ozon_login_email):
+    print('Enter email.')
     email = ozon_login_email
     email_field = driver.find_element(
         By.XPATH,
@@ -86,6 +90,7 @@ def enter_email(driver, ozon_login_email):
 
 
 def push_get_code_button(driver):
+    print('Push get code button.')
     get_code_button = driver.find_element(
         By.XPATH,
         '//div[4]/button',
@@ -94,9 +99,10 @@ def push_get_code_button(driver):
 
 
 def input_code(driver, google_credentials):
+    print('Input code.')
     sleep(15)
     verification_code = get_verification_code(google_credentials)
-    print(verification_code)
+    print(f'Verification code is: {verification_code}')
     code_input_field = driver.find_element(
         By.XPATH,
         '//div[3]/label/div/div/input',
@@ -115,7 +121,7 @@ def main():
     ozon_url = 'https://seller.ozon.ru'
     with open('run_browser.sh', 'w') as browser_launcher:
         shell_script = f'''#!/bin/bash
-        firefox -profile "{profile_path}" --new-tab "{ozon_url}" --headless &
+        firefox -profile "{profile_path}" --new-tab "{ozon_url}" &
         sleep 10
         pkill  firefox
         '''
@@ -133,18 +139,22 @@ def main():
                 partial(input_code, google_credentials=google_credentials),
             ]
             for action in request_actions:
+                print('\nCurrent action is:')
                 action(driver)
                 if driver.title == 'Just a moment...':
                     raise CaptchaReceived('Received captcha from Ozon Seller.')
-                print(driver.title)
+                print(f'''\rAction successfully done.
+                \rCurrent page is {driver.title}
+                \rHuman action delay:''')
                 human_action_delay(delay_floor, delay_ceil)
             sleep(60 * 15)
+            print('Authentication successful.')
             human_action_delay(delay_floor, delay_ceil)
         except CaptchaReceived as cr:
             print(cr)
             driver.close()
-            subprocess.call("./run_browser.sh", shell=True)
-            print('Now bot will be relaunched.')
+            subprocess.call('./run_browser.sh', shell=True)
+            print('Authentication will be restarted in:')
             human_action_delay(delay_floor, delay_ceil)
 
 
