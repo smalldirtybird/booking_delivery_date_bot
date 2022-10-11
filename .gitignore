@@ -155,3 +155,5 @@ captcha_*
 test_*
 *.pickle
 *_cookies
+run_browser.sh
+token.pickle
