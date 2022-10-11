@@ -115,7 +115,7 @@ def main():
     ozon_url = 'https://seller.ozon.ru'
     with open('run_browser.sh', 'w') as browser_launcher:
         shell_script = f'''#!/bin/bash
-        firefox -profile "{profile_path}" --new-tab "{ozon_url}" --headless  &
+        firefox -profile "{profile_path}" --new-tab "{ozon_url}" --headless &
         sleep 10
         pkill  firefox
         '''
