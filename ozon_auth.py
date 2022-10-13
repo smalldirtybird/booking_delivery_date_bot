@@ -5,6 +5,7 @@ from random import randrange
 from time import sleep
 
 import geckodriver_autoinstaller
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -46,8 +47,7 @@ def prepare_webdriver(profile_path):
 
 def pass_to_main_page(driver, ozon_url):
     print('Pass to main page.')
-    url = ozon_url
-    driver.get(url)
+    driver.get(ozon_url)
 
 
 def push_main_page_enter_button(driver):
@@ -110,6 +110,29 @@ def input_code(driver, google_credentials):
     code_input_field.send_keys(verification_code)
 
 
+def chose_account(driver, account_number):
+    print('Choose account.')
+    account_flag = driver.find_element(
+        By.XPATH,
+        f'//div[{account_number}]/label/span',
+    )
+    account_flag.click()
+
+
+def push_next_button(driver):
+    print('Push next button')
+    nex_button = driver.find_element(
+        By.XPATH,
+        '//button[2]',
+    )
+    nex_button.click()
+
+
+def pass_to_delivery_page(driver, delivery_page_url):
+    print('Pass to delivery page.')
+    driver.get(delivery_page_url)
+
+
 def main():
     clear_temp_folder()
     load_dotenv()
@@ -119,6 +142,12 @@ def main():
     delay_floor = os.environ['ACTION_DELAY_FLOOR']
     delay_ceil = os.environ['ACTION_DELAY_CEIL']
     ozon_url = 'https://seller.ozon.ru'
+    ozon_delivery_page_url = 'https://seller.ozon.ru/app/supply/orders?filter=SupplyPreparation'
+    account_name = 'ОПТ365'
+    account_numbers = {
+        'FEELFVCK': 1,
+        'ОПТ365': 2,
+    }
     with open('run_browser.sh', 'w') as browser_launcher:
         shell_script = f'''#!/bin/bash
         firefox -profile "{profile_path}" --new-tab "{ozon_url}" &
@@ -137,6 +166,15 @@ def main():
                 partial(enter_email, ozon_login_email=ozon_login_email),
                 push_get_code_button,
                 partial(input_code, google_credentials=google_credentials),
+                partial(
+                    chose_account,
+                    account_number=account_numbers[account_name],
+                ),
+                push_next_button,
+                partial(
+                    pass_to_delivery_page,
+                    delivery_page_url=ozon_delivery_page_url,
+                )
             ]
             for action in request_actions:
                 print('\nCurrent action is:')
