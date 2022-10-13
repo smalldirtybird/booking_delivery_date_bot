@@ -5,7 +5,6 @@ from random import randrange
 from time import sleep
 
 import geckodriver_autoinstaller
-from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -43,20 +42,6 @@ def prepare_webdriver(profile_path):
         options=options,
     )
     return driver
-
-
-def pass_to_main_page(driver, ozon_url):
-    print('Pass to main page.')
-    driver.get(ozon_url)
-
-
-def push_main_page_enter_button(driver):
-    print('Push main page enter button.')
-    enter_button = driver.find_element(
-        By.XPATH,
-        '//div[3]/a',
-    )
-    enter_button.click()
 
 
 def push_enter_ozon_id_button(driver):
@@ -158,35 +143,37 @@ def main():
     while True:
         try:
             driver = prepare_webdriver(profile_path)
-            request_actions = [
-                partial(pass_to_main_page, ozon_url=ozon_url),
-                push_main_page_enter_button,
-                push_enter_ozon_id_button,
-                push_use_email_button,
-                partial(enter_email, ozon_login_email=ozon_login_email),
-                push_get_code_button,
-                partial(input_code, google_credentials=google_credentials),
-                partial(
-                    chose_account,
-                    account_number=account_numbers[account_name],
-                ),
-                push_next_button,
-                partial(
-                    pass_to_delivery_page,
-                    delivery_page_url=ozon_delivery_page_url,
-                )
-            ]
-            for action in request_actions:
-                print('\nCurrent action is:')
-                action(driver)
-                if driver.title == 'Just a moment...':
-                    raise CaptchaReceived('Received captcha from Ozon Seller.')
-                print(f'''\rAction successfully done.
-                \rCurrent page is {driver.title}
-                \rHuman action delay:''')
+            pass_to_delivery_page(driver, ozon_delivery_page_url)
+            if driver.current_url != ozon_delivery_page_url:
+                request_actions = [
+                    push_enter_ozon_id_button,
+                    push_use_email_button,
+                    partial(enter_email, ozon_login_email=ozon_login_email),
+                    push_get_code_button,
+                    partial(input_code, google_credentials=google_credentials),
+                    partial(
+                        chose_account,
+                        account_number=account_numbers[account_name],
+                    ),
+                    push_next_button,
+                    partial(
+                        pass_to_delivery_page,
+                        delivery_page_url=ozon_delivery_page_url,
+                    )
+                ]
+                for action in request_actions:
+                    print('\nCurrent action is:')
+                    action(driver)
+                    if driver.title == 'Just a moment...':
+                        raise CaptchaReceived('Received captcha from Ozon Seller.')
+                    print(f'''\rAction successfully done.
+                    \rCurrent page is {driver.title}
+                    \rHuman action delay:''')
+                    human_action_delay(delay_floor, delay_ceil)
+                sleep(60 * 15)
+                print('Authentication successful.')
                 human_action_delay(delay_floor, delay_ceil)
-            sleep(60 * 15)
-            print('Authentication successful.')
+            driver.refresh()
             human_action_delay(delay_floor, delay_ceil)
         except CaptchaReceived as cr:
             print(cr)
