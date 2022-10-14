@@ -157,3 +157,4 @@ test_*
 *_cookies
 run_browser.sh
 token.pickle
+spreadsheet_credentials.json
