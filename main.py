@@ -4,7 +4,6 @@ from functools import partial
 from random import randrange
 from time import sleep
 
-
 import geckodriver_autoinstaller
 from dotenv import load_dotenv
 from selenium import webdriver
@@ -64,18 +63,22 @@ def start_authenticate(driver, delay_floor, delay_ceil):
 
 def authenticate_with_email(driver, delay_floor, delay_ceil, ozon_login_email,
                             google_credentials, ozon_delivery_page_url):
-    driver.find_element_by_xpath('//a[contains(text(), "Войти по почте")]').click()
+    driver.find_element_by_xpath(
+        '//a[contains(text(), "Войти по почте")]').click()
     human_action_delay(delay_floor, delay_ceil)
-    email_field = driver.find_element_by_xpath('//input[contains(@class, "_24-a _24-a3")]')
+    email_field = driver.find_element_by_xpath(
+        '//input[contains(@class, "_24-a _24-a3")]')
     for _ in ozon_login_email:
         email_field.send_keys(Keys.BACKSPACE)
     email_field.send_keys(ozon_login_email)
     human_action_delay(delay_floor, delay_ceil)
-    driver.find_element_by_xpath('//span[contains(text(), "Получить код")]').click()
+    driver.find_element_by_xpath(
+        '//span[contains(text(), "Получить код")]').click()
     sleep(15)
     human_action_delay(delay_floor, delay_ceil)
     verification_code = get_verification_code(google_credentials)
-    driver.find_element_by_xpath('//input[contains(@class, "_24-a _24-a4")]').send_keys(
+    driver.find_element_by_xpath(
+        '//input[contains(@class, "_24-a _24-a4")]').send_keys(
         verification_code)
     human_action_delay(delay_floor, delay_ceil)
     if driver.current_url == 'https://seller.ozon.ru/app/registration/signin':
@@ -90,9 +93,10 @@ def authenticate_with_email(driver, delay_floor, delay_ceil, ozon_login_email,
 
 def select_account(driver, delay_floor, delay_ceil, account_name,
                    ozon_delivery_page_url):
-    driver.find_element_by_xpath(f'//div[contains(text(), "{account_name}")]').click()
+    driver.find_element_by_xpath(
+        f'//div[contains(text(), "{account_name}")]').click()
     human_action_delay(delay_floor, delay_ceil)
-    driver.find_element_by_xpath(f'//span[contains(text(), "Далее")]').click()
+    driver.find_element_by_xpath('//span[contains(text(), "Далее")]').click()
     human_action_delay(delay_floor, delay_ceil)
     if driver.current_url == 'https://seller.ozon.ru/app/dashboard/main':
         driver.get(ozon_delivery_page_url)
@@ -102,9 +106,11 @@ def select_account(driver, delay_floor, delay_ceil, account_name,
         return 'GOT_CAPTCHA'
 
 
-def switch_account(driver, delay_floor, delay_ceil, account_number, account_name,
+def switch_account(driver, delay_floor, delay_ceil, account_name,
                    ozon_delivery_page_url):
-    current_account_button = driver.find_element_by_xpath('//span[contains(@class, "index_companyItem_Pae1n index_hasSelect_s1JiM")]')
+    current_account_button = driver.find_element_by_xpath(
+        '//span[contains(@class, '
+        '"index_companyItem_Pae1n index_hasSelect_s1JiM")]')
     print(account_name)
     print(current_account_button.text)
     if current_account_button.text == account_name:
@@ -112,7 +118,8 @@ def switch_account(driver, delay_floor, delay_ceil, account_number, account_name
         return'DELIVERY_MANAGEMENT'
     else:
         current_account_button.click()
-        driver.find_element_by_xpath(f'//div[contains(text(), "{account_name}")]').click()
+        driver.find_element_by_xpath(
+            f'//div[contains(text(), "{account_name}")]').click()
         human_action_delay(delay_floor, delay_ceil)
         sleep(10)
         if driver.title == 'Just a moment...':
@@ -121,59 +128,42 @@ def switch_account(driver, delay_floor, delay_ceil, account_number, account_name
             return 'DELIVERY_MANAGEMENT'
 
 
-def handle_captcha(driver):
+def handle_captcha(driver, delay_floor, delay_ceil):
     driver.close()
     subprocess.call('./run_browser.sh', shell=True)
     os.system(f'python3 {__file__}')
 
 
 def handle_statement(driver, ozon_delivery_page_url, delay_floor, delay_ceil,
-                     ozon_login_email, google_credentials, account_number, account_name):
+                     ozon_login_email, google_credentials,
+                     account_name):
     global STATE
     states = {
         'START': partial(
             start,
-            driver=driver,
-            delay_floor=delay_floor,
-            delay_ceil=delay_ceil,
             ozon_delivery_page_url=ozon_delivery_page_url,
         ),
-        'NEED_AUTHENTICATE': partial(
-            start_authenticate,
-            driver=driver,
-            delay_floor=delay_floor,
-            delay_ceil=delay_ceil,
-        ),
+        'NEED_AUTHENTICATE': start_authenticate,
         'AUTHENTICATION_PROCESS': partial(
             authenticate_with_email,
-            driver=driver,
-            delay_floor=delay_floor,
-            delay_ceil=delay_ceil,
             ozon_login_email=ozon_login_email,
             google_credentials=google_credentials,
             ozon_delivery_page_url=ozon_delivery_page_url,
         ),
         'ACCOUNT_SELECTION': partial(
             select_account,
-            driver=driver,
-            delay_floor=delay_floor,
-            delay_ceil=delay_ceil,
             account_name=account_name,
             ozon_delivery_page_url=ozon_delivery_page_url
         ),
         'SWITCH_ACCOUNT': partial(
             switch_account,
-            driver=driver,
-            delay_floor=delay_floor,
-            delay_ceil=delay_ceil,
-            account_number=account_number,
             account_name=account_name,
             ozon_delivery_page_url=ozon_delivery_page_url,
         ),
         'DELIVERY_MANAGEMENT': '',
-        'GOT_CAPTCHA': partial(handle_captcha, driver=driver),
+        'GOT_CAPTCHA': handle_captcha,
     }
-    STATE = states[STATE]()
+    STATE = states[STATE](driver, delay_floor, delay_ceil)
     print(STATE)
 
 
@@ -186,12 +176,9 @@ def main():
     delay_floor = os.environ['ACTION_DELAY_FLOOR']
     delay_ceil = os.environ['ACTION_DELAY_CEIL']
     ozon_url = 'https://seller.ozon.ru'
-    ozon_delivery_page_url = 'https://seller.ozon.ru/app/supply/orders?filter=SupplyPreparation'
-    account_name = 'FEELFVCK'
-    account_numbers = {
-        'FEELFVCK': 1,
-        'ОПТ365': 2,
-    }
+    ozon_delivery_page_url = 'https://seller.ozon.ru/app/supply/' \
+                             'orders?filter=SupplyPreparation'
+    account_name = 'ОПТ365'
     with open('run_browser.sh', 'w') as browser_launcher:
         shell_script = f'''#!/bin/bash
         firefox -profile "{profile_path}" --new-tab "{ozon_url}" &
@@ -209,7 +196,6 @@ def main():
             delay_ceil,
             ozon_login_email,
             google_credentials,
-            account_numbers[account_name],
             account_name,
         )
     driver.close()
