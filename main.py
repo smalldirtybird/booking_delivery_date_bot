@@ -1,6 +1,6 @@
 import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from random import randrange
 from time import sleep
@@ -9,6 +9,7 @@ import geckodriver_autoinstaller
 from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
 from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.firefox.options import Options
@@ -57,6 +58,24 @@ def convert_date_range(date_range_string):
     if date_range[0] > date_range[1]:
         date_range[1] += relativedelta(years=+1)
     return tuple(date_range)
+
+
+def get_best_available_date_index(available_days, date_range,
+                                  desired_time):
+    start_date, end_date = date_range
+    delta = end_date - start_date
+    date_list = []
+    for day in range(delta.days + 1):
+        date = start_date + timedelta(days=day)
+        if str(date.day) in available_days:
+            date_list.append(date)
+    best_available_date = None
+    for time in date_list:
+        if not best_available_date or abs(
+                desired_time - time
+        ) < abs(desired_time - best_available_date):
+            best_available_date = time
+    return date_list.index(best_available_date)
 
 
 def prepare_webdriver(profile_path):
@@ -149,8 +168,6 @@ def switch_account(driver, delay, account_name,
     current_account_button = driver.find_element_by_xpath(
         '//span[contains(@class, '
         '"index_companyItem_Pae1n index_hasSelect_s1JiM")]')
-    print(account_name)
-    print(current_account_button.text)
     if current_account_button.text == account_name:
         return'DELIVERY_MANAGEMENT'
     else:
@@ -170,23 +187,20 @@ def change_date_range(driver, delay, desired_date):
     right_switcher, current_date_range_string,\
         left_switcher = slots_range_switcher.find_elements_by_tag_name('div')
     current_date_range = convert_date_range(current_date_range_string.text)
-    print(current_date_range)
     if desired_date < min(current_date_range):
         right_switcher.click()
         delay()
-    elif desired_date > max(current_date_range):
+    if desired_date > max(current_date_range):
         left_switcher.click()
         delay()
-    else:
-        return
     new_date_range = convert_date_range(driver.find_element_by_xpath(
         '//div[contains(@class, '
         '"slots-range-switcher_dateSwitcherInterval_220Nq")]').text)
-    if new_date_range == current_date_range:
-        print(new_date_range)
-        return
-    else:
+    delay()
+    if new_date_range != current_date_range:
         change_date_range(driver, delay, desired_date)
+    else:
+        return
 
 
 def choose_delivery_date(driver, delay, delivery_date_requirements):
@@ -222,6 +236,38 @@ def choose_delivery_date(driver, delay, delivery_date_requirements):
         current_delivery_date_button.click()
         delay()
         change_date_range(driver, delay, desired_date)
+        available_date_range = convert_date_range(driver.find_element_by_xpath(
+            '//div[contains(@class, '
+            '"slots-range-switcher_dateSwitcherInterval_220Nq")]').text)
+        available_days = driver.find_element_by_xpath(
+            '//div[contains(@class, "time-slots-table_slotsTableHead_ERvbR")]')
+        available_dates = []
+        for day in available_days.find_elements_by_class_name(
+                'time-slots-table_cellHeadDate_2VUyD'):
+            available_dates.append(day.text)
+        best_available_date_index = get_best_available_date_index(
+            available_dates,
+            available_date_range,
+            desired_date,
+        )
+        datetime_slots = driver.find_element_by_class_name(
+            'time-slots-table_slotsTableContentContainer_1Z9BS')
+        count = 0
+        for slot in datetime_slots.find_elements_by_class_name(
+                'time-slots-table_slotsTableCell_MTw9O'):
+            if count == 7:
+                count = 0
+            if count == best_available_date_index:
+                slot.click()
+                try:
+                    slot.find_element_by_class_name(
+                        'time-slots-table_selectedSlot_3H6l9')
+                    break
+                except NoSuchElementException:
+                    pass
+            count += 1
+        driver.find_element_by_class_name('custom-button_text_2H7oV').click()
+        delay()
         return 'DONE'
 
 
@@ -265,7 +311,6 @@ def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
         'GOT_CAPTCHA': handle_captcha,
     }
     STATE = states[STATE](driver, delay)
-    print(STATE)
 
 
 def main():
