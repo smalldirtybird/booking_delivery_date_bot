@@ -9,7 +9,6 @@ import geckodriver_autoinstaller
 from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.firefox.options import Options
@@ -314,8 +313,11 @@ def choose_delivery_date(driver, delay, delivery_date_requirements):
     return 'WAIT'
 
 
-def wait(driver, delay):
-    sleep(10)
+def wait(driver, delay, start_time, sleep_time):
+    wakeup_time = start_time + timedelta(minutes=sleep_time)
+    while datetime.now() < wakeup_time:
+        driver.refresh()
+        delay()
     return 'START'
 
 
@@ -326,7 +328,7 @@ def handle_captcha(driver, delay):
 
 def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
                      google_credentials, account_name,
-                     delivery_date_requirements):
+                     delivery_date_requirements, start_time, sleep_time):
     delay()
     if driver.page_source.find('Произошла ошибка на сервере') != -1:
         driver.refresh()
@@ -357,7 +359,7 @@ def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
             choose_delivery_date,
             delivery_date_requirements=delivery_date_requirements
         ),
-        'WAIT': wait,
+        'WAIT': partial(wait, start_time, sleep_time),
         'GOT_CAPTCHA': handle_captcha,
     }
     STATE = states[STATE](driver, delay)
@@ -398,6 +400,9 @@ def main():
                 os.environ['SHEET_NAME'],
                 os.environ['ACCOUNT_NAME'],
             ),
+
+            datetime.now(),
+            os.environ['SLEEP_TIME_MINUTES = 5'],
         )
         # driver.close()
 
