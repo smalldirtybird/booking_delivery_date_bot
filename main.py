@@ -125,8 +125,9 @@ def start(driver, delay, ozon_delivery_page_url):
     subprocess.call('./run_browser.sh', shell=True)
     driver.get(ozon_delivery_page_url)
     delay()
-    if driver.title == 'Just a moment...':
-        return 'GOT_CAPTCHA'
+    if driver.title == 'Just a moment...'\
+            or driver.page_source.find('Произошла ошибка на сервере') != -1:
+        return 'BLOCKING_WORKED'
     if driver.current_url == ozon_delivery_page_url:
         return 'SWITCH_ACCOUNT'
     else:
@@ -136,8 +137,9 @@ def start(driver, delay, ozon_delivery_page_url):
 def start_authenticate(driver, delay):
     driver.find_element_by_xpath('//span[contains(text(), "Войти")]').click()
     delay()
-    if driver.title == 'Just a moment...':
-        return 'GOT_CAPTCHA'
+    if driver.title == 'Just a moment...' \
+            or driver.page_source.find('Произошла ошибка на сервере') != -1:
+        return 'BLOCKING_WORKED'
     else:
         return 'AUTHENTICATION_PROCESS'
 
@@ -162,14 +164,16 @@ def authenticate_with_email(driver, delay, ozon_login_email,
         '//input[contains(@inputmode, "numeric")]').send_keys(
         verification_code)
     delay()
-    if driver.title == 'Just a moment...':
-        return 'GOT_CAPTCHA'
+    if driver.title == 'Just a moment...' \
+            or driver.page_source.find('Произошла ошибка на сервере') != -1:
+        return 'BLOCKING_WORKED'
     if driver.current_url == 'https://seller.ozon.ru/app/registration/signin':
         return 'ACCOUNT_SELECTION'
     else:
         driver.get(ozon_delivery_page_url)
-    if driver.title == 'Just a moment...':
-        return 'GOT_CAPTCHA'
+    if driver.title == 'Just a moment...' \
+            or driver.page_source.find('Произошла ошибка на сервере') != -1:
+        return 'BLOCKING_WORKED'
     if driver.current_url == ozon_delivery_page_url:
         return 'SWITCH_ACCOUNT'
 
@@ -181,8 +185,9 @@ def select_account(driver, delay, account_name,
     delay()
     driver.find_element_by_xpath('//span[contains(text(), "Далее")]').click()
     delay()
-    if driver.title == 'Just a moment...':
-        return 'GOT_CAPTCHA'
+    if driver.title == 'Just a moment...' \
+            or driver.page_source.find('Произошла ошибка на сервере') != -1:
+        return 'BLOCKING_WORKED'
     if driver.current_url == 'https://seller.ozon.ru/app/dashboard/main':
         driver.get(ozon_delivery_page_url)
     if driver.current_url == ozon_delivery_page_url:
@@ -201,8 +206,10 @@ def switch_account(driver, delay, account_name,
         driver.find_element_by_xpath(
             f'//div[contains(text(), "{account_name}")]').click()
         delay()
-        if driver.title == 'Just a moment...':
-            return 'GOT_CAPTCHA'
+        if driver.title == 'Just a moment...' \
+                or driver.page_source.find(
+            'Произошла ошибка на сервере') != -1:
+            return 'BLOCKING_WORKED'
         if driver.current_url == ozon_delivery_page_url:
             return 'DELIVERY_MANAGEMENT'
 
@@ -284,7 +291,7 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             desired_date,
             current_delivery_date,
         )
-        if not first_border:
+        if first_border is None:
             driver.find_element_by_xpath('//button[contains(@aria-label, '
                                          '"Крестик для закрытия")]').click()
             continue
@@ -330,7 +337,7 @@ def wait(driver, delay, start_time, sleep_time):
     return 'START'
 
 
-def handle_captcha(driver, delay):
+def handle_blocking(driver, delay):
     delay()
     os.system(f'python3 {__file__}')
 
@@ -340,9 +347,6 @@ def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
                      delivery_date_requirements, start_time, sleep_time,
                      google_spreadsheet_credentials, table_name, sheet_name
                      ):
-    delay()
-    if driver.page_source.find('Произошла ошибка на сервере') != -1:
-        driver.refresh()
     global STATE
     states = {
         'START': partial(
@@ -374,7 +378,7 @@ def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
             sheet_name=sheet_name,
         ),
         'WAIT': partial(wait, start_time=start_time, sleep_time=sleep_time),
-        'GOT_CAPTCHA': handle_captcha,
+        'BLOCKING_WORKED': handle_blocking,
     }
     STATE = states[STATE](driver, delay)
     print(STATE)
@@ -415,12 +419,11 @@ def main():
                 os.environ['ACCOUNT_NAME'],
             ),
             datetime.now(),
-            os.environ['SLEEP_TIME_MINUTES'],
+            int(os.environ['SLEEP_TIME_MINUTES']),
             os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
             os.environ['TABLE_NAME'],
             os.environ['SHEET_NAME'],
         )
-        # driver.close()
 
 
 if __name__ == '__main__':

@@ -15,7 +15,7 @@ def get_delivery_date_requirements(google_credentials, table_name, sheet_name,
     for row in spreadsheet:
         min_date = row[1]
         current_date = row[4]
-        if row[5] == account_name and min_date != current_date:
+        if row[5] == account_name:
             delivery_date_requirements[row[0]] = {
                 'min_date': datetime.strptime(min_date, '%d.%m.%Y').date(),
                 'max_date': datetime.strptime(row[2], '%d.%m.%Y').date(),
