@@ -15,7 +15,8 @@ from selenium.webdriver.firefox.options import Options
 
 from clear_temp_folder import clear_temp_folder
 from gmail_api import get_verification_code
-from spreadsheets_api import get_delivery_date_requirements
+from spreadsheets_api import (get_delivery_date_requirements,
+                              update_current_delivery_date)
 
 STATE = 'START'
 
@@ -232,7 +233,8 @@ def change_date_range(driver, delay, desired_date, seen_ranges):
         return
 
 
-def choose_delivery_date(driver, delay, delivery_date_requirements):
+def choose_delivery_date(driver, delay, delivery_date_requirements,
+                         google_credentials, table_name, sheet_name):
     for delivery_id, details in delivery_date_requirements.items():
 
         # фильтр поставки по номеру
@@ -310,6 +312,13 @@ def choose_delivery_date(driver, delay, delivery_date_requirements):
                 break
         driver.find_element_by_class_name('custom-button_text_2H7oV').click()
         delay()
+        update_current_delivery_date(
+            google_credentials,
+            table_name,
+            sheet_name,
+            details['current_delivery_date_cell_coordinates'],
+            current_delivery_date_button.text,
+        )
     return 'WAIT'
 
 
@@ -328,7 +337,9 @@ def handle_captcha(driver, delay):
 
 def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
                      google_credentials, account_name,
-                     delivery_date_requirements, start_time, sleep_time):
+                     delivery_date_requirements, start_time, sleep_time,
+                     google_spreadsheet_credentials, table_name, sheet_name
+                     ):
     delay()
     if driver.page_source.find('Произошла ошибка на сервере') != -1:
         driver.refresh()
@@ -357,9 +368,12 @@ def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
         ),
         'DELIVERY_MANAGEMENT': partial(
             choose_delivery_date,
-            delivery_date_requirements=delivery_date_requirements
+            delivery_date_requirements=delivery_date_requirements,
+            google_credentials=google_spreadsheet_credentials,
+            table_name=table_name,
+            sheet_name=sheet_name,
         ),
-        'WAIT': partial(wait, start_time, sleep_time),
+        'WAIT': partial(wait, start_time=start_time, sleep_time=sleep_time),
         'GOT_CAPTCHA': handle_captcha,
     }
     STATE = states[STATE](driver, delay)
@@ -400,9 +414,11 @@ def main():
                 os.environ['SHEET_NAME'],
                 os.environ['ACCOUNT_NAME'],
             ),
-
             datetime.now(),
-            os.environ['SLEEP_TIME_MINUTES = 5'],
+            os.environ['SLEEP_TIME_MINUTES'],
+            os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
+            os.environ['TABLE_NAME'],
+            os.environ['SHEET_NAME'],
         )
         # driver.close()
 
