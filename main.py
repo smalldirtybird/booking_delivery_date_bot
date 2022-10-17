@@ -23,7 +23,6 @@ STATE = 'START'
 
 def human_action_delay(floor, ceil):
     delay_time = randrange(int(floor) * 1000, int(ceil) * 1000) / 1000
-    print(f'{delay_time} sec.')
     sleep(delay_time)
 
 
@@ -60,8 +59,8 @@ def convert_date_range(date_range_string):
     return tuple(date_range)
 
 
-def get_best_available_date_index(available_days, date_range,
-                                  desired_time):
+def get_slot_search_window(available_days, date_range, desired_date,
+                           current_date):
     start_date, end_date = date_range
     delta = end_date - start_date
     date_list = []
@@ -69,13 +68,39 @@ def get_best_available_date_index(available_days, date_range,
         date = start_date + timedelta(days=day)
         if str(date.day) in available_days:
             date_list.append(date)
-    best_available_date = None
-    for time in date_list:
-        if not best_available_date or abs(
-                desired_time - time
-        ) < abs(desired_time - best_available_date):
-            best_available_date = time
-    return date_list.index(best_available_date)
+    if desired_date in date_list:
+        return date_list.index(desired_date), date_list.index(desired_date)
+    first_available_date_index = None
+    last_available_date_index = None
+    for date in date_list:
+        if desired_date < date < current_date and (
+                not first_available_date_index
+                or date < date_list[first_available_date_index]
+        ):
+            first_available_date_index = date_list.index(date)
+        if desired_date < date < current_date:
+            last_available_date_index = date_list.index(date)
+    return first_available_date_index, last_available_date_index
+
+
+def rotate_slots_table(slots, columns_quantity, first_column, last_column):
+    slots_rotated = []
+    column = 1
+    row = 0
+    for slot in slots:
+        slots_rotated.insert(row * column, slot)
+        row += 1
+        if row == columns_quantity:
+            row = 0
+            column += 1
+    slots_in_column = len(slots_rotated) / columns_quantity
+    lower_border = 0
+    upper_border = len(slots_rotated)
+    if first_column:
+        lower_border = int(first_column * slots_in_column)
+    if last_column:
+        upper_border = int((last_column + 1) * slots_in_column)
+    return slots_rotated[lower_border:upper_border]
 
 
 def prepare_webdriver(profile_path):
@@ -97,6 +122,7 @@ def prepare_webdriver(profile_path):
 
 
 def start(driver, delay, ozon_delivery_page_url):
+    subprocess.call('./run_browser.sh', shell=True)
     driver.get(ozon_delivery_page_url)
     delay()
     if driver.title == 'Just a moment...':
@@ -122,7 +148,7 @@ def authenticate_with_email(driver, delay, ozon_login_email,
         '//a[contains(text(), "Войти по почте")]').click()
     delay()
     email_field = driver.find_element_by_xpath(
-        '//input[contains(@class, "_24-a _24-a3")]')
+        '//input[contains(@inputmode, "email")]')
     for _ in ozon_login_email:
         email_field.send_keys(Keys.BACKSPACE)
     email_field.send_keys(ozon_login_email)
@@ -133,7 +159,7 @@ def authenticate_with_email(driver, delay, ozon_login_email,
     delay()
     verification_code = get_verification_code(google_credentials)
     driver.find_element_by_xpath(
-        '//input[contains(@class, "_24-a _24-a4")]').send_keys(
+        '//input[contains(@inputmode, "numeric")]').send_keys(
         verification_code)
     delay()
     if driver.title == 'Just a moment...':
@@ -181,24 +207,28 @@ def switch_account(driver, delay, account_name,
             return 'DELIVERY_MANAGEMENT'
 
 
-def change_date_range(driver, delay, desired_date):
+def change_date_range(driver, delay, desired_date, seen_ranges):
     slots_range_switcher = driver.find_element_by_xpath(
         '//div[contains(@class, "slots-range-switcher_dateSwitcher_34ExK")]')
-    right_switcher, current_date_range_string,\
-        left_switcher = slots_range_switcher.find_elements_by_tag_name('div')
+    left_switcher, current_date_range_string,\
+        right_switcher = slots_range_switcher.find_elements_by_tag_name('div')
+    left_switcher_html = left_switcher.get_attribute('innerHTML')
+    right_switcher_html = right_switcher.get_attribute('innerHTML')
     current_date_range = convert_date_range(current_date_range_string.text)
-    if desired_date < min(current_date_range):
-        right_switcher.click()
-        delay()
-    if desired_date > max(current_date_range):
+    seen_ranges.append(current_date_range)
+    if desired_date < min(current_date_range) \
+            and left_switcher_html.find('disabled="disabled"') == -1:
         left_switcher.click()
         delay()
-    new_date_range = convert_date_range(driver.find_element_by_xpath(
+    if desired_date > max(current_date_range) \
+            and right_switcher_html.find('disabled="disabled"') == -1:
+        right_switcher.click()
+        delay()
+    if convert_date_range(driver.find_element_by_xpath(
         '//div[contains(@class, '
-        '"slots-range-switcher_dateSwitcherInterval_220Nq")]').text)
-    delay()
-    if new_date_range != current_date_range:
-        change_date_range(driver, delay, desired_date)
+        '"slots-range-switcher_dateSwitcherInterval_220Nq")]').text) \
+            not in seen_ranges:
+        change_date_range(driver, delay, desired_date, seen_ranges)
     else:
         return
 
@@ -227,15 +257,17 @@ def choose_delivery_date(driver, delay, delivery_date_requirements):
         current_delivery_date = datetime.strptime(
             current_delivery_date_button.text,
             '%d.%m.%Y',
-        )
+        ).date()
         desired_date = details['min_date']
         if current_delivery_date == desired_date:
             continue
 
-        # поиск максимально близкой к желаемой возможной даты поставки
+        # открытие формы выбора таймслота
         current_delivery_date_button.click()
         delay()
-        change_date_range(driver, delay, desired_date)
+        change_date_range(driver, delay, desired_date, [])
+
+        # анализ доступных дат
         available_date_range = convert_date_range(driver.find_element_by_xpath(
             '//div[contains(@class, '
             '"slots-range-switcher_dateSwitcherInterval_220Nq")]').text)
@@ -245,42 +277,59 @@ def choose_delivery_date(driver, delay, delivery_date_requirements):
         for day in available_days.find_elements_by_class_name(
                 'time-slots-table_cellHeadDate_2VUyD'):
             available_dates.append(day.text)
-        best_available_date_index = get_best_available_date_index(
+        first_border, last_border = get_slot_search_window(
             available_dates,
             available_date_range,
             desired_date,
+            current_delivery_date,
         )
+        if not first_border:
+            driver.find_element_by_xpath('//button[contains(@aria-label, '
+                                         '"Крестик для закрытия")]').click()
+            continue
+
+        # генерация массива слотов от меньшей даты и от конца дня
         datetime_slots = driver.find_element_by_class_name(
             'time-slots-table_slotsTableContentContainer_1Z9BS')
-        count = 0
-        for slot in datetime_slots.find_elements_by_class_name(
-                'time-slots-table_slotsTableCell_MTw9O'):
-            if count == 7:
-                count = 0
-            if count == best_available_date_index:
+        slots_table = rotate_slots_table(
+            datetime_slots.find_elements_by_class_name(
+                'time-slots-table_slotsTableCell_MTw9O'),
+            7,
+            first_border,
+            last_border,
+        )
+
+        # попытка клика на слот
+        for slot in slots_table:
+            if slot.get_attribute('innerHTML').find(
+                    'table_emptyCell_dxX7v') == -1:
                 slot.click()
-                try:
-                    slot.find_element_by_class_name(
-                        'time-slots-table_selectedSlot_3H6l9')
-                    break
-                except NoSuchElementException:
-                    pass
-            count += 1
+                delay()
+            if slot.get_attribute('innerHTML').find(
+                    'time-slots-table_selectedSlot_3H6l9') != -1:
+                delay()
+                break
         driver.find_element_by_class_name('custom-button_text_2H7oV').click()
         delay()
-        return 'DONE'
+    return 'WAIT'
+
+
+def wait(driver, delay):
+    sleep(10)
+    return 'START'
 
 
 def handle_captcha(driver, delay):
-    driver.close()
     delay()
-    subprocess.call('./run_browser.sh', shell=True)
     os.system(f'python3 {__file__}')
 
 
 def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
                      google_credentials, account_name,
                      delivery_date_requirements):
+    delay()
+    if driver.page_source.find('Произошла ошибка на сервере') != -1:
+        driver.refresh()
     global STATE
     states = {
         'START': partial(
@@ -308,9 +357,11 @@ def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
             choose_delivery_date,
             delivery_date_requirements=delivery_date_requirements
         ),
+        'WAIT': wait,
         'GOT_CAPTCHA': handle_captcha,
     }
     STATE = states[STATE](driver, delay)
+    print(STATE)
 
 
 def main():
@@ -321,23 +372,22 @@ def main():
     profile_path = os.environ['FIREFOX_PROFILE_PATH']
     delay_floor = os.environ['ACTION_DELAY_FLOOR']
     delay_ceil = os.environ['ACTION_DELAY_CEIL']
-    ozon_url = 'https://seller.ozon.ru'
-    ozon_delivery_page_url = 'https://seller.ozon.ru/app/supply/' \
-                             'orders?filter=SupplyPreparation'
+    ozon_url = 'https://seller.ozon.ru/app/supply/' \
+               'orders?filter=SupplyPreparation'
     account_name = os.environ['ACCOUNT_NAME']
     with open('run_browser.sh', 'w') as browser_launcher:
         shell_script = f'''#!/bin/bash
         firefox -profile "{profile_path}" --new-tab "{ozon_url}" &
         sleep 10
-        pkill  firefox
+        kill -9 $!
+        kill -9 $!
         '''
         browser_launcher.write(shell_script)
-
     driver = prepare_webdriver(profile_path)
-    while STATE != 'DONE':
+    while True:
         handle_statement(
             driver,
-            ozon_delivery_page_url,
+            ozon_url,
             partial(human_action_delay, floor=delay_floor, ceil=delay_ceil),
             ozon_login_email,
             google_credentials,
@@ -349,7 +399,7 @@ def main():
                 os.environ['ACCOUNT_NAME'],
             ),
         )
-    driver.close()
+        # driver.close()
 
 
 if __name__ == '__main__':
