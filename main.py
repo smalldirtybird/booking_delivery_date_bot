@@ -18,7 +18,7 @@ from telegram import Bot
 from clear_temp_folder import clear_temp_folder
 from gmail_api import get_verification_code
 from spreadsheets_api import (get_delivery_date_requirements,
-                              update_current_delivery_date)
+                              update_spreadsheet)
 
 logger = logging.getLogger('TelegramLogger')
 STATE = 'START'
@@ -79,12 +79,15 @@ def get_slot_search_window(available_days, date_range, desired_date,
     start_date, end_date = date_range
     delta = end_date - start_date
     date_list = []
+    print('Available delivery dates:')
     for day in range(delta.days + 1):
         date = start_date + timedelta(days=day)
         if str(date.day) in available_days:
             date_list.append(date)
+            print(date)
     if desired_date in date_list:
         return date_list.index(desired_date), date_list.index(desired_date)
+    print('Available delivery dates:')
     first_available_date_index = None
     last_available_date_index = None
     for date in date_list:
@@ -126,7 +129,7 @@ def prepare_webdriver(profile_path):
     profile.update_preferences()
     desired = DesiredCapabilities.FIREFOX
     options = Options()
-    # options.add_argument('--headless')
+    options.add_argument('--headless')
     driver = webdriver.Firefox(
         firefox_binary='/usr/bin/firefox',
         firefox_profile=profile,
@@ -259,6 +262,7 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                          google_credentials, table_name, sheet_name, tg_bot,
                          tg_chat_id):
     for delivery_id, details in delivery_date_requirements.items():
+        print(f'Now handle delivery {delivery_id}.')
 
         # фильтр поставки по номеру
         search_field_button = driver.find_element_by_xpath(
@@ -273,6 +277,11 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
         delay()
         search_field_button.click()
         delay()
+        if driver.title == 'Just a moment...' \
+                or driver.page_source.find(
+                'Произошла ошибка на сервере') != -1:
+            return 'BLOCKING_WORKED'
+        print(f'Delivery {delivery_id} found.')
 
         # проверка равенства желаемой и текущей даты поставки
         current_delivery_date_button = driver.find_element_by_xpath(
@@ -284,6 +293,14 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
         ).date()
         desired_date = details['min_date']
         if current_delivery_date == desired_date:
+            print('Desired date already set.')
+            update_spreadsheet(
+                google_credentials,
+                table_name,
+                sheet_name,
+                details['processed_cell'],
+                '1',
+            )
             continue
 
         # открытие формы выбора таймслота
@@ -336,18 +353,38 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
         driver.find_element_by_class_name('custom-button_text_2H7oV').click()
         delay()
         new_delivery_date = current_delivery_date_button.text
-        update_current_delivery_date(
+        update_spreadsheet(
             google_credentials,
             table_name,
             sheet_name,
             details['current_delivery_date_cell_coordinates'],
             new_delivery_date,
         )
+        if datetime.strptime(new_delivery_date, '%d.%m.%Y').date() == \
+                desired_date:
+            update_spreadsheet(
+                google_credentials,
+                table_name,
+                sheet_name,
+                details['processed_cell'],
+                '1',
+            )
+        else:
+            update_spreadsheet(
+                google_credentials,
+                table_name,
+                sheet_name,
+                details['processed_cell'],
+                '0',
+            )
+        print(f'Set new delivery date: {new_delivery_date}')
         date_update_message = f'''
         \rДата поставки №{delivery_id} обновлена.
         \rНовая дата поставки: {new_delivery_date}.
         '''
-        tg_bot.send_message(chat_id=tg_chat_id, text=date_update_message),
+        tg_bot.send_message(chat_id=tg_chat_id, text=date_update_message)
+        driver.refresh()
+        delay()
     return 'WAIT'
 
 
@@ -425,22 +462,23 @@ def main():
         account_name = os.environ['ACCOUNT_NAME']
         with open('run_browser.sh', 'w') as browser_launcher:
             shell_script = f'''#!/bin/bash
-            firefox -profile "{profile_path}" --new-tab "{ozon_url}" &
+            firefox -profile "{profile_path}" --new-tab "{ozon_url}" --headless &
             sleep 10
             kill -9 $!
             kill -9 $!
             '''
             browser_launcher.write(shell_script)
         driver = prepare_webdriver(profile_path)
+        delay = partial(
+                    human_action_delay,
+                    floor=delay_floor,
+                    ceil=delay_ceil,
+                )
         while True:
             handle_statement(
                 driver,
                 ozon_url,
-                partial(
-                    human_action_delay,
-                    floor=delay_floor,
-                    ceil=delay_ceil,
-                ),
+                delay,
                 ozon_login_email,
                 google_credentials,
                 account_name,
@@ -461,6 +499,7 @@ def main():
     except Exception:
         logger.exception(
             f'{datetime.now()}\n\rБот упал со следующей ошибкой:')
+        handle_blocking(driver, delay)
 
 
 if __name__ == '__main__':

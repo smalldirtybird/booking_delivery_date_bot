@@ -158,3 +158,4 @@ test_*
 run_browser.sh
 token.pickle
 spreadsheet_credentials.json
+nohup.out
