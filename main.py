@@ -1,3 +1,4 @@
+import logging
 import os
 import subprocess
 from datetime import datetime, timedelta
@@ -12,13 +13,27 @@ from selenium import webdriver
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.firefox.options import Options
+from telegram import Bot
 
 from clear_temp_folder import clear_temp_folder
 from gmail_api import get_verification_code
 from spreadsheets_api import (get_delivery_date_requirements,
                               update_current_delivery_date)
 
+logger = logging.getLogger('TelegramLogger')
 STATE = 'START'
+
+
+class TelegramLogsHandler(logging.Handler):
+
+    def __init__(self, tg_bot, chat_id):
+        super().__init__()
+        self.chat_id = chat_id
+        self.tg_bot = tg_bot
+
+    def emit(self, record):
+        log_entry = self.format(record)
+        self.tg_bot.send_message(chat_id=self.chat_id, text=log_entry)
 
 
 def human_action_delay(floor, ceil):
@@ -208,7 +223,7 @@ def switch_account(driver, delay, account_name,
         delay()
         if driver.title == 'Just a moment...' \
                 or driver.page_source.find(
-            'Произошла ошибка на сервере') != -1:
+                'Произошла ошибка на сервере') != -1:
             return 'BLOCKING_WORKED'
         if driver.current_url == ozon_delivery_page_url:
             return 'DELIVERY_MANAGEMENT'
@@ -241,7 +256,8 @@ def change_date_range(driver, delay, desired_date, seen_ranges):
 
 
 def choose_delivery_date(driver, delay, delivery_date_requirements,
-                         google_credentials, table_name, sheet_name):
+                         google_credentials, table_name, sheet_name, tg_bot,
+                         tg_chat_id):
     for delivery_id, details in delivery_date_requirements.items():
 
         # фильтр поставки по номеру
@@ -319,13 +335,19 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                 break
         driver.find_element_by_class_name('custom-button_text_2H7oV').click()
         delay()
+        new_delivery_date = current_delivery_date_button.text
         update_current_delivery_date(
             google_credentials,
             table_name,
             sheet_name,
             details['current_delivery_date_cell_coordinates'],
-            current_delivery_date_button.text,
+            new_delivery_date,
         )
+        date_update_message = f'''
+        \rДата поставки №{delivery_id} обновлена.
+        \rНовая дата поставки: {new_delivery_date}.
+        '''
+        tg_bot.send_message(chat_id=tg_chat_id, text=date_update_message),
     return 'WAIT'
 
 
@@ -345,8 +367,8 @@ def handle_blocking(driver, delay):
 def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
                      google_credentials, account_name,
                      delivery_date_requirements, start_time, sleep_time,
-                     google_spreadsheet_credentials, table_name, sheet_name
-                     ):
+                     google_spreadsheet_credentials, table_name, sheet_name,
+                     tg_bot, tg_chat_id):
     global STATE
     states = {
         'START': partial(
@@ -376,6 +398,8 @@ def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
             google_credentials=google_spreadsheet_credentials,
             table_name=table_name,
             sheet_name=sheet_name,
+            tg_bot=tg_bot,
+            tg_chat_id=tg_chat_id,
         ),
         'WAIT': partial(wait, start_time=start_time, sleep_time=sleep_time),
         'BLOCKING_WORKED': handle_blocking,
@@ -385,45 +409,58 @@ def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
 
 
 def main():
-    clear_temp_folder()
-    load_dotenv()
-    google_credentials = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
-    ozon_login_email = os.environ['OZON_LOGIN_EMAIL']
-    profile_path = os.environ['FIREFOX_PROFILE_PATH']
-    delay_floor = os.environ['ACTION_DELAY_FLOOR']
-    delay_ceil = os.environ['ACTION_DELAY_CEIL']
-    ozon_url = 'https://seller.ozon.ru/app/supply/' \
-               'orders?filter=SupplyPreparation'
-    account_name = os.environ['ACCOUNT_NAME']
-    with open('run_browser.sh', 'w') as browser_launcher:
-        shell_script = f'''#!/bin/bash
-        firefox -profile "{profile_path}" --new-tab "{ozon_url}" &
-        sleep 10
-        kill -9 $!
-        kill -9 $!
-        '''
-        browser_launcher.write(shell_script)
-    driver = prepare_webdriver(profile_path)
-    while True:
-        handle_statement(
-            driver,
-            ozon_url,
-            partial(human_action_delay, floor=delay_floor, ceil=delay_ceil),
-            ozon_login_email,
-            google_credentials,
-            account_name,
-            get_delivery_date_requirements(
+    try:
+        load_dotenv()
+        tg_bot = Bot(token=os.environ['TELEGRAM_BOT_TOKEN'])
+        tg_chat_id = os.environ['TELEGRAM_CHAT_ID']
+        logger.addHandler(TelegramLogsHandler(tg_bot, tg_chat_id))
+        clear_temp_folder()
+        google_credentials = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
+        ozon_login_email = os.environ['OZON_LOGIN_EMAIL']
+        profile_path = os.environ['FIREFOX_PROFILE_PATH']
+        delay_floor = os.environ['ACTION_DELAY_FLOOR']
+        delay_ceil = os.environ['ACTION_DELAY_CEIL']
+        ozon_url = 'https://seller.ozon.ru/app/supply/' \
+                   'orders?filter=SupplyPreparation'
+        account_name = os.environ['ACCOUNT_NAME']
+        with open('run_browser.sh', 'w') as browser_launcher:
+            shell_script = f'''#!/bin/bash
+            firefox -profile "{profile_path}" --new-tab "{ozon_url}" &
+            sleep 10
+            kill -9 $!
+            kill -9 $!
+            '''
+            browser_launcher.write(shell_script)
+        driver = prepare_webdriver(profile_path)
+        while True:
+            handle_statement(
+                driver,
+                ozon_url,
+                partial(
+                    human_action_delay,
+                    floor=delay_floor,
+                    ceil=delay_ceil,
+                ),
+                ozon_login_email,
+                google_credentials,
+                account_name,
+                get_delivery_date_requirements(
+                    os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
+                    os.environ['TABLE_NAME'],
+                    os.environ['SHEET_NAME'],
+                    os.environ['ACCOUNT_NAME'],
+                ),
+                datetime.now(),
+                int(os.environ['SLEEP_TIME_MINUTES']),
                 os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
                 os.environ['TABLE_NAME'],
                 os.environ['SHEET_NAME'],
-                os.environ['ACCOUNT_NAME'],
-            ),
-            datetime.now(),
-            int(os.environ['SLEEP_TIME_MINUTES']),
-            os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
-            os.environ['TABLE_NAME'],
-            os.environ['SHEET_NAME'],
-        )
+                tg_bot,
+                tg_chat_id,
+            )
+    except Exception:
+        logger.exception(
+            f'{datetime.now()}\n\rБот упал со следующей ошибкой:')
 
 
 if __name__ == '__main__':
