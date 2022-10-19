@@ -316,6 +316,13 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                 google_credentials,
                 table_name,
                 sheet_name,
+                details['current_delivery_date_cell_coordinates'],
+                current_delivery_date,
+            )
+            update_spreadsheet(
+                google_credentials,
+                table_name,
+                sheet_name,
                 details['processed_cell'],
                 '1',
             )
