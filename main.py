@@ -431,7 +431,9 @@ def wait(driver, delay, start_time, sleep_time):
 
 
 def handle_blocking(driver, delay):
+    driver.close()
     delay()
+    os.system('pkill firefox')
     os.system(f'python3 {__file__}')
 
 
@@ -501,6 +503,7 @@ def main():
                     floor=delay_floor,
                     ceil=delay_ceil,
                 )
+        tg_bot.send_message(chat_id=tg_chat_id, text='Бот запущен.')
         while True:
             handle_statement(
                 driver,
@@ -525,7 +528,7 @@ def main():
             )
     except Exception:
         logger.exception(
-            f'{datetime.now()}\n\rБот упал со следующей ошибкой:')
+            f'{datetime.now()}\n\rБот упал и будет перезапущен. Ошибка:')
         handle_blocking(driver, delay)
 
 
