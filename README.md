@@ -1,5 +1,7 @@
 # Бот для бронирования дат поставок
 
+## [Как установить бота на сервер](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/deploy.md)
+
 ## Как пользоваться
 
 ### Запуск
