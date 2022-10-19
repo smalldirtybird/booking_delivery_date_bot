@@ -10,13 +10,23 @@
 
 a. Пуск -> Подключение к удалённому рабочему столу
 
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_16-36-26.jpg?raw=true)
+
 b. Ввести ip-адрес сервера, нажать "Показать параметры".
+
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_16-37-01.jpg?raw=true)
 
 c. Ввести имя пользователя (по умолчанию - root). Поставить галку "Разрешить мне сохранять учётные данные". Нажать "Подключить".
 
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_16-37-10.jpg?raw=true)
+
 d. Ввести пароль от учётной записи, нажать "Ok".
 
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_16-37-17.jpg?raw=true)
+
 2. На удалённом рабочем столе открыть терминал.
+
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_16-37-23.jpg?raw=true)
 
 3. Запустить бота, последовательно выполнив через командную строку указанные команды:
 
@@ -44,6 +54,8 @@ nohup python3 main.py &
 ### Редактирование настроек поиска дат для бронирования
 
 Бот собирает параметры поставок из [строго определённой таблицы](https://docs.google.com/spreadsheets/d/1fjCuy2j6gikIDPR5HZvEThrT3BLyr-0iHmx7Ek4-VnY/edit?usp=sharing).
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_16-37-44.jpg?raw=true)
+
 Важно отметить, что таблица имеет конкретный формат, который ни в коем случае нельзя менять по своему усмотрению - это приведёт неполадкам в работе бота. Так же важно учитывать правильный формат и корректность самих данных поставки - записи с несуществующим номером поставки или временем сборки "два дня" будут проигнорированы.
 
 Описание полей таблицы:
@@ -65,4 +77,9 @@ nohup python3 main.py &
 ### Ограничения доступа
 
 Список пользователей, имеющих доступ к таблице устанавливается с помощью стандартного интерфейса Google Spreadsheet.
+
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_16-37-50.jpg?raw=true)
+
 Удалять из списка пользователя с почтовым доменом `...gserviseaccount.com` строго запрещено - это сервисный аккаунт, через который бот взаимодействует с таблицей.
+
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_16-37-56.jpg?raw=true)
