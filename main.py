@@ -10,9 +10,12 @@ import geckodriver_autoinstaller
 from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
 from selenium import webdriver
+from selenium.webdriver.common.by import By
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.support import expected_conditions
+from selenium.webdriver.support.ui import WebDriverWait
 from telegram import Bot
 
 from clear_temp_folder import clear_temp_folder
@@ -263,8 +266,13 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
         print(f'Now handle delivery {delivery_id}.')
 
         # фильтр поставки по номеру
-        search_field_button = driver.find_element_by_xpath(
-            '//div[contains(text(), "Номер")]')
+        search_field_button = WebDriverWait(driver, 20).until(
+            expected_conditions.element_to_be_clickable((
+                By.XPATH,
+                '//div[contains(text(), "Номер")]',
+            )))
+        # search_field_button = driver.find_element_by_xpath(
+        #     '//div[contains(text(), "Номер")]')
         search_field_button.click()
         delay()
         delivery_search_field = driver.find_element_by_xpath(
@@ -480,14 +488,6 @@ def main():
         ozon_url = 'https://seller.ozon.ru/app/supply/' \
                    'orders?filter=SupplyPreparation'
         account_name = os.environ['ACCOUNT_NAME']
-        with open('run_browser.sh', 'w') as browser_launcher:
-            shell_script = f'''#!/bin/bash
-            firefox -profile "{profile_path}" --new-tab "{ozon_url}" --headless &
-            sleep 10
-            kill -9 $!
-            kill -9 $!
-            '''
-            browser_launcher.write(shell_script)
         driver = prepare_webdriver(profile_path)
         delay = partial(
                     human_action_delay,
