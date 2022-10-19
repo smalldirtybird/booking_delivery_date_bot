@@ -352,7 +352,9 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                 break
         driver.find_element_by_class_name('custom-button_text_2H7oV').click()
         delay()
-        new_delivery_date = current_delivery_date_button.text
+        new_delivery_date = driver.find_element_by_xpath(
+            '//span[contains(@class, '
+            '"orders-table-body-module_dateCell_tKzib")]')
         update_spreadsheet(
             google_credentials,
             table_name,
