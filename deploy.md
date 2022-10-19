@@ -121,61 +121,66 @@ sudo apt install python3-virtualenv
 
 8.1 [Создать проект в Google Cloud](https://console.cloud.google.com/). Вверху страницы вызвать выпадающее меню выбора проекта и нажать `New project`.
 
-![]()
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-12-52.jpg?raw=true)
 
 Ввести имя проекта и нажать "Create", далее выбрать его в выпадающем меню.
 
 8.2 В [консоли проекта](https://console.cloud.google.com/) перейти во вкладку `APIs & Services/Enabled APIs & services`.
 
-![]()
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-13-03.jpg?raw=true)
 
 Нажать `ENABLE APIS AND SERVISES`.
 
-![]()
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-13-12.jpg?raw=true)
 
 Через поисковую строку найти `Gmail API`, перейти его на страницу и нажать `ENABLE`.
 
-![]()![]()
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-13-17.jpg?raw=true)
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-13-24.jpg?raw=true)
 
 Аналогичным образом разрешить Google Sheet API и Google Drive API.
 
 8.3 На вкладке [APIs & Services](https://console.cloud.google.com/apis/) перейти к пункту `Credentials`, нажать `CREATE CREDENTIALS` и выбрать `OAuth clientID`.
 
-![]()
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-13-35.jpg?raw=true)
 
 Нажать `CONFIGURE CONSENT SCREEN`, выбрать User Type `External` и нажать `Create`.
 
-![]()![]()
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-13-39.jpg?raw=true)
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-13-43.jpg?raw=true)
 
 Заполнить обязательные поля, отмеченные звё1здочкой `*`, нажать `SAVE AND CONTINUE`.
 
 Повторить первый шаг данного пункта - дойти до вкладки `Create OAuth client ID`. Далее выбрать тип приложения `Desktop app` и нажать `Create`.
-![]()
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-13-51.jpg?raw=true)
 
 Появится всплывающее окно с секретными ключами с кнопкой `DOWNLOAD JSON`, нажать её и сохранить как `google_credentials.json`.
 Далее нажать `OK`.
 
-![]()
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-13-58.jpg?raw=true)
 
 8.4 На той же странице в области `Service Accounts` нажать на `Manage service accounts`, далее `CREATE SERVICE ACCOUNT`.
 
-![]()![]()
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-14-04.jpg?raw=true)
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-14-17.jpg?raw=true)
 
 Указать id аккаунта (на свой выбор) и нажать `DONE`.
 
-![]()
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-14-22.jpg?raw=true)
 
 В области `Service accounts for project...` нажать на email только что созданного аккаунта, перейти на вкладку `KEYS`, нажать `ADD KEY` и выбрать `Create new key`.
 
-![]()![]()
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-14-27.jpg?raw=true)
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-14-34.jpg?raw=true)
 
 Во всплывающем окне выбрать `JSON`, нажать `CREATE`. Полученный файл сохранить как `spreadsheet_credentials.json`. Далее скопировать email из `Service acoounts for project`. 
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-15-08.jpg?raw=true)
 
 8.5 [Создать новую таблицу](https://docs.google.com/spreadsheets/u/0/) со следующей структурой:
 `Номер поставки, цифры`	`Начало периода для поиска даты отгрузки, ДД.ММ.ГГГГ`	`Конец периода для поиска даты отгрузки, ДД.ММ.ГГГГ`	`Время сборки заказа в полных днях, цифры`	`Текущая дата отправки заказа, заполняется автоматически`	`Имя аккаунта`	`Дата найдена, заполняется автоматически, 1 - да, 0 - нет`
 В только что созданной таблице нажать `Настройки Доступа` и добавить скопированный email сервисного аккаунта как редактора. Нажать`Готово`.
 
-![]()
+![](https://github.com/smalldirtybird/booking_delivery_date_bot/blob/main/docs/photo_2022-10-19_20-15-14.jpg?raw=true)
 
 9. Для первого запуска боту потребуется графический интерфейс. Если он не установлен на сервере, необходимо установить его, следуя [инструкции](https://help.reg.ru/support/servery-vps/oblachnyye-servery/ustanovka-programmnogo-obespecheniya/graficheskiye-obolochki-ubuntu).
 
@@ -185,7 +190,9 @@ sudo apt install python3-virtualenv
 11. Для мониторинга и оповещения о работе бота используется мессенджер Telegram. Необходимо создать TG-бота, который будет интегрирован с приложением и отправлять оповещения в указанный чат. Для этого нужно:
 
 11.1 В Telegram написать [@BotFather](https://t.me/BotFather), используя команду `/newbot` и следуя инструкциям создать нового бота. В итоге в чате появится сообщение, содержащее токен бота - его нужно сохранить.
+
 11.2 Если бот должен отправлять сообщения в публичный чат или канал - добавить туда TG бота и в настройках чата разрешить ему отправлять сообщения.
+
 11.3 Если бот должен отправлять сообщения в личные сообщения конкретному пользователю, пользователь перед первым запуском должен запустить чат с ботом, написав ему любое сообщение.
 
 ## Установка файлов приложения
