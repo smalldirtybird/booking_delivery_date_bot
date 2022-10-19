@@ -17,8 +17,7 @@ from telegram import Bot
 
 from clear_temp_folder import clear_temp_folder
 from gmail_api import get_verification_code
-from spreadsheets_api import (get_delivery_date_requirements,
-                              update_spreadsheet)
+from spreadsheets_api import get_delivery_date_requirements, update_spreadsheet
 
 logger = logging.getLogger('TelegramLogger')
 STATE = 'START'
@@ -87,7 +86,6 @@ def get_slot_search_window(available_days, date_range, desired_date,
             print(date)
     if desired_date in date_list:
         return date_list.index(desired_date), date_list.index(desired_date)
-    print('Available delivery dates:')
     first_available_date_index = None
     last_available_date_index = None
     for date in date_list:
@@ -260,7 +258,7 @@ def change_date_range(driver, delay, desired_date, seen_ranges):
 
 def choose_delivery_date(driver, delay, delivery_date_requirements,
                          google_credentials, table_name, sheet_name, tg_bot,
-                         tg_chat_id):
+                         tg_chat_id, account_name):
     for delivery_id, details in delivery_date_requirements.items():
         print(f'Now handle delivery {delivery_id}.')
 
@@ -281,6 +279,18 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                 or driver.page_source.find(
                 'Произошла ошибка на сервере') != -1:
             return 'BLOCKING_WORKED'
+        if driver.find_element_by_xpath(
+            '//div[contains(@class, "container-fluid")]').get_attribute(
+            'innerHTML').find(
+                    'Нет записей') != -1:
+            not_found_message = f'''
+            \rПоставка № {delivery_id} не найдена в списках {account_name}.
+            \rПроверьте корректность информации в таблице {table_name}.
+            '''
+            tg_bot.send_message(chat_id=tg_chat_id, text=not_found_message)
+            driver.refresh()
+            delay()
+            continue
         print(f'Delivery {delivery_id} found.')
 
         # проверка равенства желаемой и текущей даты поставки
@@ -327,6 +337,13 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
         if first_border is None:
             driver.find_element_by_xpath('//button[contains(@aria-label, '
                                          '"Крестик для закрытия")]').click()
+            update_spreadsheet(
+                google_credentials,
+                table_name,
+                sheet_name,
+                details['processed_cell'],
+                '0',
+            )
             continue
 
         # генерация массива слотов от меньшей даты и от конца дня
@@ -354,7 +371,7 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
         delay()
         new_delivery_date = driver.find_element_by_xpath(
             '//span[contains(@class, '
-            '"orders-table-body-module_dateCell_tKzib")]')
+            '"orders-table-body-module_dateCell_tKzib")]').text
         update_spreadsheet(
             google_credentials,
             table_name,
@@ -439,6 +456,7 @@ def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
             sheet_name=sheet_name,
             tg_bot=tg_bot,
             tg_chat_id=tg_chat_id,
+            account_name=account_name,
         ),
         'WAIT': partial(wait, start_time=start_time, sleep_time=sleep_time),
         'BLOCKING_WORKED': handle_blocking,
