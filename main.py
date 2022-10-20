@@ -272,15 +272,11 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                          tg_chat_id, account_name):
     for delivery_id, details in delivery_date_requirements.items():
         print(f'Now handle delivery {delivery_id}.')
-
-        # фильтр поставки по номеру
         search_field_button = WebDriverWait(driver, 20).until(
             expected_conditions.element_to_be_clickable((
                 By.XPATH,
                 '//div[contains(text(), "Номер")]',
             )))
-        # search_field_button = driver.find_element_by_xpath(
-        #     '//div[contains(text(), "Номер")]')
         search_field_button.click()
         delay()
         delivery_search_field = driver.find_element_by_xpath(
@@ -308,8 +304,6 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             delay()
             continue
         print(f'Delivery {delivery_id} found.')
-
-        # проверка равенства желаемой и текущей даты поставки
         current_delivery_date_button = driver.find_element_by_xpath(
             '//span[contains(@class, '
             '"orders-table-body-module_dateCell_tKzib")]')
@@ -335,13 +329,9 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                 '1',
             )
             continue
-
-        # открытие формы выбора таймслота
         current_delivery_date_button.click()
         delay()
         change_date_range(driver, delay, desired_date, [])
-
-        # анализ доступных дат
         available_date_range = convert_date_range(driver.find_element_by_xpath(
             '//div[contains(@class, '
             '"slots-range-switcher_dateSwitcherInterval_220Nq")]').text)
@@ -368,8 +358,6 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                 '0',
             )
             continue
-
-        # генерация массива слотов от меньшей даты и от конца дня
         datetime_slots = driver.find_element_by_class_name(
             'time-slots-table_slotsTableContentContainer_1Z9BS')
         slots_table = rotate_slots_table(
@@ -379,8 +367,6 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             first_border,
             last_border,
         )
-
-        # попытка клика на слот
         for slot in slots_table:
             if slot.get_attribute('innerHTML').find(
                     'table_emptyCell_dxX7v') == -1:
@@ -435,7 +421,6 @@ def wait(driver, delay, sleep_time):
     driver.close()
     wakeup_time = start_time + timedelta(minutes=sleep_time)
     left_time_to_sleep = wakeup_time - datetime.now()
-    print(left_time_to_sleep)
     if left_time_to_sleep > timedelta(seconds=0):
         sleep(left_time_to_sleep.seconds)
     return 'START'
@@ -444,7 +429,6 @@ def wait(driver, delay, sleep_time):
 def handle_blocking(driver, delay):
     delay()
     os.system('pkill firefox')
-    # os.system(f'python3 {__file__}')
     return 'START'
 
 
