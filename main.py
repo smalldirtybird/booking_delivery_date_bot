@@ -476,7 +476,7 @@ def handle_statement(profile_path, ozon_delivery_page_url, delay,
         'WAIT': partial(wait, sleep_time=sleep_time),
         'BLOCKING_WORKED': handle_blocking,
     }
-    print(STATE)
+    print(datetime.now(), STATE)
     STATE = states[STATE](web_driver, delay)
 
 
