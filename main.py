@@ -141,6 +141,7 @@ def prepare_webdriver(profile_path):
 
 
 def start(driver, delay, ozon_delivery_page_url):
+    clear_temp_folder()
     subprocess.call('./run_browser.sh', shell=True)
     driver.get(ozon_delivery_page_url)
     delay()
@@ -431,7 +432,6 @@ def wait(driver, delay, start_time, sleep_time):
 
 
 def handle_blocking(driver, delay):
-    driver.close()
     delay()
     os.system('pkill firefox')
     os.system(f'python3 {__file__}')
@@ -478,8 +478,8 @@ def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
         'WAIT': partial(wait, start_time=start_time, sleep_time=sleep_time),
         'BLOCKING_WORKED': handle_blocking,
     }
-    STATE = states[STATE](driver, delay)
     print(STATE)
+    STATE = states[STATE](driver, delay)
 
 
 def main():
@@ -488,7 +488,6 @@ def main():
         tg_bot = Bot(token=os.environ['TELEGRAM_BOT_TOKEN'])
         tg_chat_id = os.environ['TELEGRAM_CHAT_ID']
         logger.addHandler(TelegramLogsHandler(tg_bot, tg_chat_id))
-        clear_temp_folder()
         google_credentials = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
         ozon_login_email = os.environ['OZON_LOGIN_EMAIL']
         profile_path = os.environ['FIREFOX_PROFILE_PATH']
