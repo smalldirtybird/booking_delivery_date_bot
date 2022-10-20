@@ -24,6 +24,8 @@ from spreadsheets_api import get_delivery_date_requirements, update_spreadsheet
 
 logger = logging.getLogger('TelegramLogger')
 STATE = 'START'
+web_driver = None
+start_time = None
 
 
 class TelegramLogsHandler(logging.Handler):
@@ -140,15 +142,20 @@ def prepare_webdriver(profile_path):
     return driver
 
 
-def start(driver, delay, ozon_delivery_page_url):
+def start(driver, delay, ozon_delivery_page_url, profile_path):
+    global web_driver
+    global start_time
+    start_time = datetime.now()
     clear_temp_folder()
     subprocess.call('./run_browser.sh', shell=True)
-    driver.get(ozon_delivery_page_url)
+    web_driver = prepare_webdriver(profile_path)
+    web_driver.get(ozon_delivery_page_url)
     delay()
-    if driver.title == 'Just a moment...'\
-            or driver.page_source.find('Произошла ошибка на сервере') != -1:
+    if web_driver.title == 'Just a moment...'\
+            or web_driver.page_source.find(
+            'Произошла ошибка на сервере') != -1:
         return 'BLOCKING_WORKED'
-    if driver.current_url == ozon_delivery_page_url:
+    if web_driver.current_url == ozon_delivery_page_url:
         return 'SWITCH_ACCOUNT'
     else:
         return 'NEED_AUTHENTICATE'
@@ -423,30 +430,37 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
     return 'WAIT'
 
 
-def wait(driver, delay, start_time, sleep_time):
+def wait(driver, delay, sleep_time):
+    global start_time
+    driver.close()
     wakeup_time = start_time + timedelta(minutes=sleep_time)
-    while datetime.now() < wakeup_time:
-        driver.refresh()
-        delay()
+    left_time_to_sleep = wakeup_time - datetime.now()
+    print(left_time_to_sleep)
+    if left_time_to_sleep > timedelta(seconds=0):
+        sleep(left_time_to_sleep.seconds)
     return 'START'
 
 
 def handle_blocking(driver, delay):
     delay()
     os.system('pkill firefox')
-    os.system(f'python3 {__file__}')
+    # os.system(f'python3 {__file__}')
+    return 'START'
 
 
-def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
-                     google_credentials, account_name,
-                     delivery_date_requirements, start_time, sleep_time,
+def handle_statement(profile_path, ozon_delivery_page_url, delay,
+                     ozon_login_email, google_credentials, account_name,
+                     delivery_date_requirements, sleep_time,
                      google_spreadsheet_credentials, table_name, sheet_name,
                      tg_bot, tg_chat_id):
     global STATE
+    global web_driver
+    global start_time
     states = {
         'START': partial(
             start,
             ozon_delivery_page_url=ozon_delivery_page_url,
+            profile_path=profile_path,
         ),
         'NEED_AUTHENTICATE': start_authenticate,
         'AUTHENTICATION_PROCESS': partial(
@@ -475,11 +489,11 @@ def handle_statement(driver, ozon_delivery_page_url, delay, ozon_login_email,
             tg_chat_id=tg_chat_id,
             account_name=account_name,
         ),
-        'WAIT': partial(wait, start_time=start_time, sleep_time=sleep_time),
+        'WAIT': partial(wait, sleep_time=sleep_time),
         'BLOCKING_WORKED': handle_blocking,
     }
     print(STATE)
-    STATE = states[STATE](driver, delay)
+    STATE = states[STATE](web_driver, delay)
 
 
 def main():
@@ -490,13 +504,11 @@ def main():
         logger.addHandler(TelegramLogsHandler(tg_bot, tg_chat_id))
         google_credentials = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
         ozon_login_email = os.environ['OZON_LOGIN_EMAIL']
-        profile_path = os.environ['FIREFOX_PROFILE_PATH']
         delay_floor = os.environ['ACTION_DELAY_FLOOR']
         delay_ceil = os.environ['ACTION_DELAY_CEIL']
         ozon_url = 'https://seller.ozon.ru/app/supply/' \
                    'orders?filter=SupplyPreparation'
         account_name = os.environ['ACCOUNT_NAME']
-        driver = prepare_webdriver(profile_path)
         delay = partial(
                     human_action_delay,
                     floor=delay_floor,
@@ -505,7 +517,7 @@ def main():
         tg_bot.send_message(chat_id=tg_chat_id, text='Бот запущен.')
         while True:
             handle_statement(
-                driver,
+                os.environ['FIREFOX_PROFILE_PATH'],
                 ozon_url,
                 delay,
                 ozon_login_email,
@@ -517,7 +529,6 @@ def main():
                     os.environ['SHEET_NAME'],
                     os.environ['ACCOUNT_NAME'],
                 ),
-                datetime.now(),
                 int(os.environ['SLEEP_TIME_MINUTES']),
                 os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
                 os.environ['TABLE_NAME'],
@@ -528,7 +539,8 @@ def main():
     except Exception:
         logger.exception(
             f'{datetime.now()}\n\rБот упал и будет перезапущен. Ошибка:')
-        handle_blocking(driver, delay)
+        os.system('pkill firefox')
+        os.system(f'python3 {__file__}')
 
 
 if __name__ == '__main__':
