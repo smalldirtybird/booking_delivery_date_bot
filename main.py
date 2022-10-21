@@ -80,27 +80,32 @@ def convert_date_range(date_range_string):
 
 def get_slot_search_window(available_days, date_range, desired_date,
                            current_date):
-    start_date, end_date = date_range
-    delta = end_date - start_date
+    previous_date, last_date = date_range
     date_list = []
     print('Available delivery dates:')
-    for day in range(delta.days + 1):
-        date = start_date + timedelta(days=day)
-        if str(date.day) in available_days:
-            date_list.append(date)
-            print(date)
-    if desired_date in date_list:
-        return date_list.index(desired_date), date_list.index(desired_date)
+    for day in available_days:
+        date = previous_date.replace(day=int(day))
+        if date_list and date < date_list[available_days.index(day) - 1]:
+            date = date.replace(month=(date.month + 1))
+        print(date)
+        date_list.append(date)
     first_available_date_index = None
     last_available_date_index = None
     for date in date_list:
+        if date == desired_date:
+            return date_list.index(desired_date), date_list.index(desired_date)
         if desired_date < date < current_date and (
                 not first_available_date_index
                 or date < date_list[first_available_date_index]
         ):
             first_available_date_index = date_list.index(date)
-        if desired_date < date < current_date:
+        if desired_date < date < current_date and (
+                not last_available_date_index
+                or date < date_list[last_available_date_index]
+        ):
             last_available_date_index = date_list.index(date)
+    if not last_available_date_index and first_available_date_index:
+        last_available_date_index = first_available_date_index
     return first_available_date_index, last_available_date_index
 
 
