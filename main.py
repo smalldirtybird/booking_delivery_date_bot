@@ -89,23 +89,17 @@ def get_slot_search_window(available_days, date_range, desired_date,
             date = date.replace(month=(date.month + 1))
         print(date)
         date_list.append(date)
+    suitable_dates = []
+    for date in date_list:
+        if date == desired_date or current_date < desired_date < date or \
+                current_date > desired_date and \
+                desired_date < date < current_date:
+            suitable_dates.append(date)
     first_available_date_index = None
     last_available_date_index = None
-    for date in date_list:
-        if date == desired_date:
-            return date_list.index(desired_date), date_list.index(desired_date)
-        if desired_date < date < current_date and (
-                not first_available_date_index
-                or date < date_list[first_available_date_index]
-        ):
-            first_available_date_index = date_list.index(date)
-        if desired_date < date < current_date and (
-                not last_available_date_index
-                or date < date_list[last_available_date_index]
-        ):
-            last_available_date_index = date_list.index(date)
-    if not last_available_date_index and first_available_date_index:
-        last_available_date_index = first_available_date_index
+    if suitable_dates:
+        first_available_date_index = date_list.index(min(suitable_dates))
+        last_available_date_index = date_list.index(max(suitable_dates))
     return first_available_date_index, last_available_date_index
 
 
@@ -137,7 +131,7 @@ def prepare_webdriver(profile_path):
     profile.update_preferences()
     desired = DesiredCapabilities.FIREFOX
     options = Options()
-    options.add_argument('--headless')
+    # options.add_argument('--headless')
     driver = webdriver.Firefox(
         firefox_binary='/usr/bin/firefox',
         firefox_profile=profile,
@@ -359,6 +353,13 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                 google_credentials,
                 table_name,
                 sheet_name,
+                details['current_delivery_date_cell_coordinates'],
+                current_delivery_date_button.text,
+            )
+            update_spreadsheet(
+                google_credentials,
+                table_name,
+                sheet_name,
                 details['processed_cell'],
                 '0',
             )
@@ -377,47 +378,75 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                     'table_emptyCell_dxX7v') == -1:
                 slot.click()
                 delay()
+            else:
+                continue
             if slot.get_attribute('innerHTML').find(
                     'time-slots-table_selectedSlot_3H6l9') != -1:
+                chosen_date_time = driver.find_element_by_xpath(
+                    '//span[contains(@class, "time-slot-select-dialog_'
+                    'selectedTimeslotDateLabel_3QFJq")]'
+                ).find_element_by_xpath('../.').text
+                chosen_date, chosen_time = chosen_date_time.split(
+                    sep='Время: ')
+                _, cleared_date = chosen_date.split(sep=', ')
+                formatted_chosen_date, _ = convert_date_range(
+                    f'{cleared_date} — {cleared_date}')
+                if desired_date < current_delivery_date < \
+                        formatted_chosen_date:
+                    slot.click()
+                    delay()
+                    driver.find_element_by_xpath(
+                        '//button[contains(@aria-label, '
+                        '"Крестик для закрытия")]').click()
+                    break
+                elif formatted_chosen_date < desired_date:
+                    slot.click()
+                    delay()
+                    driver.find_element_by_xpath(
+                        '//button[contains(@aria-label, '
+                        '"Крестик для закрытия")]').click()
+                    continue
+                else:
+                    driver.find_element_by_class_name(
+                        'custom-button_text_2H7oV').click()
                 delay()
+                new_delivery_date = driver.find_element_by_xpath(
+                    '//span[contains(@class, '
+                    '"orders-table-body-module_dateCell_tKzib")]').text
+                update_spreadsheet(
+                    google_credentials,
+                    table_name,
+                    sheet_name,
+                    details['current_delivery_date_cell_coordinates'],
+                    new_delivery_date,
+                )
+                print(f'Set new delivery date: {new_delivery_date}')
+                date_update_message = f'''
+                                \rДата поставки №{delivery_id} обновлена.
+                                \rНовая дата поставки: {new_delivery_date}.
+                                '''
+                tg_bot.send_message(chat_id=tg_chat_id,
+                                    text=date_update_message)
+                if datetime.strptime(new_delivery_date, '%d.%m.%Y').date() == \
+                        desired_date:
+                    update_spreadsheet(
+                        google_credentials,
+                        table_name,
+                        sheet_name,
+                        details['processed_cell'],
+                        '1',
+                    )
+                else:
+                    update_spreadsheet(
+                        google_credentials,
+                        table_name,
+                        sheet_name,
+                        details['processed_cell'],
+                        '0',
+                    )
                 break
-        driver.find_element_by_class_name('custom-button_text_2H7oV').click()
-        delay()
-        new_delivery_date = driver.find_element_by_xpath(
-            '//span[contains(@class, '
-            '"orders-table-body-module_dateCell_tKzib")]').text
-        update_spreadsheet(
-            google_credentials,
-            table_name,
-            sheet_name,
-            details['current_delivery_date_cell_coordinates'],
-            new_delivery_date,
-        )
-        if datetime.strptime(new_delivery_date, '%d.%m.%Y').date() == \
-                desired_date:
-            update_spreadsheet(
-                google_credentials,
-                table_name,
-                sheet_name,
-                details['processed_cell'],
-                '1',
-            )
-        else:
-            update_spreadsheet(
-                google_credentials,
-                table_name,
-                sheet_name,
-                details['processed_cell'],
-                '0',
-            )
-        print(f'Set new delivery date: {new_delivery_date}')
-        date_update_message = f'''
-        \rДата поставки №{delivery_id} обновлена.
-        \rНовая дата поставки: {new_delivery_date}.
-        '''
-        tg_bot.send_message(chat_id=tg_chat_id, text=date_update_message)
-        driver.refresh()
-        delay()
+            driver.refresh()
+            delay()
     return 'WAIT'
 
 
