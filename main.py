@@ -19,8 +19,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from telegram import Bot
 
 from clear_temp_folder import clear_temp_folder
-from gmail_api import get_verification_code
 from spreadsheets_api import get_delivery_date_requirements, update_spreadsheet
+from yandex_mail import get_verification_code
 
 logger = logging.getLogger('TelegramLogger')
 STATE = 'START'
@@ -176,8 +176,8 @@ def start_authenticate(driver, delay):
         return 'AUTHENTICATION_PROCESS'
 
 
-def authenticate_with_email(driver, delay, ozon_login_email,
-                            google_credentials, ozon_delivery_page_url):
+def authenticate_with_email(driver, delay, ozon_login_email, yandex_email,
+                            yandex_password, ozon_delivery_page_url):
     driver.find_element_by_xpath(
         '//a[contains(text(), "Войти по почте")]').click()
     delay()
@@ -191,7 +191,7 @@ def authenticate_with_email(driver, delay, ozon_login_email,
         '//span[contains(text(), "Получить код")]').click()
     sleep(15)
     delay()
-    verification_code = get_verification_code(google_credentials)
+    verification_code = get_verification_code(yandex_email, yandex_password)
     driver.find_element_by_xpath(
         '//input[contains(@inputmode, "numeric")]').send_keys(
         verification_code)
@@ -438,8 +438,8 @@ def handle_blocking(driver, delay):
 
 
 def handle_statement(profile_path, ozon_delivery_page_url, delay,
-                     ozon_login_email, google_credentials, account_name,
-                     delivery_date_requirements, sleep_time,
+                     ozon_login_email, yandex_email, yandex_password,
+                     account_name, delivery_date_requirements, sleep_time,
                      google_spreadsheet_credentials, table_name, sheet_name,
                      tg_bot, tg_chat_id):
     global STATE
@@ -455,7 +455,8 @@ def handle_statement(profile_path, ozon_delivery_page_url, delay,
         'AUTHENTICATION_PROCESS': partial(
             authenticate_with_email,
             ozon_login_email=ozon_login_email,
-            google_credentials=google_credentials,
+            yandex_email=yandex_email,
+            yandex_password=yandex_password,
             ozon_delivery_page_url=ozon_delivery_page_url,
         ),
         'ACCOUNT_SELECTION': partial(
@@ -491,7 +492,6 @@ def main():
         tg_bot = Bot(token=os.environ['TELEGRAM_BOT_TOKEN'])
         tg_chat_id = os.environ['TELEGRAM_CHAT_ID']
         logger.addHandler(TelegramLogsHandler(tg_bot, tg_chat_id))
-        google_credentials = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
         ozon_login_email = os.environ['OZON_LOGIN_EMAIL']
         delay_floor = os.environ['ACTION_DELAY_FLOOR']
         delay_ceil = os.environ['ACTION_DELAY_CEIL']
@@ -510,7 +510,8 @@ def main():
                 ozon_url,
                 delay,
                 ozon_login_email,
-                google_credentials,
+                os.environ['YANDEX_EMAIL'],
+                os.environ['YANDEX_PASSWORD'],
                 account_name,
                 get_delivery_date_requirements(
                     os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
