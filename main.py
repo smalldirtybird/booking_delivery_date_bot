@@ -73,8 +73,10 @@ def convert_date_range(date_range_string):
             )
         )
         date_range.append(datetime.strptime(date_string, '%d.%m.%Y').date())
-    if date_range[0] > date_range[1]:
+    if len(date_range) > 1 and date_range[0] > date_range[1]:
         date_range[1] += relativedelta(years=+1)
+    if len(date_range) == 1:
+        return tuple(date_range * 2)
     return tuple(date_range)
 
 
@@ -243,8 +245,11 @@ def switch_account(driver, delay, account_name,
 def change_date_range(driver, delay, desired_date, seen_ranges):
     slots_range_switcher = driver.find_element_by_xpath(
         '//div[contains(@class, "slots-range-switcher_dateSwitcher_34ExK")]')
+    slots_range_switcher_components = slots_range_switcher.find_elements_by_tag_name('div')
+    if len(slots_range_switcher_components) == 1:
+        return
     left_switcher, current_date_range_string,\
-        right_switcher = slots_range_switcher.find_elements_by_tag_name('div')
+        right_switcher = slots_range_switcher_components
     left_switcher_html = left_switcher.get_attribute('innerHTML')
     right_switcher_html = right_switcher.get_attribute('innerHTML')
     current_date_range = convert_date_range(current_date_range_string.text)
