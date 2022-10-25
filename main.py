@@ -343,6 +343,20 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             delay()
             driver.find_element_by_xpath('//button[contains(@aria-label, '
                                          '"Крестик для закрытия")]').click()
+            update_spreadsheet(
+                google_credentials,
+                table_name,
+                sheet_name,
+                details['current_delivery_date_cell_coordinates'],
+                current_delivery_date_button.text,
+            )
+            update_spreadsheet(
+                google_credentials,
+                table_name,
+                sheet_name,
+                details['processed_cell'],
+                '0',
+            )
             continue
         delay()
         change_date_range(driver, delay, desired_date, [])
@@ -413,13 +427,24 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                     driver.find_element_by_xpath(
                         '//button[contains(@aria-label, '
                         '"Крестик для закрытия")]').click()
+                    update_spreadsheet(
+                        google_credentials,
+                        table_name,
+                        sheet_name,
+                        details['current_delivery_date_cell_coordinates'],
+                        current_delivery_date_button.text,
+                    )
+                    update_spreadsheet(
+                        google_credentials,
+                        table_name,
+                        sheet_name,
+                        details['processed_cell'],
+                        '0',
+                    )
                     break
                 elif formatted_chosen_date < desired_date:
                     slot.click()
                     delay()
-                    driver.find_element_by_xpath(
-                        '//button[contains(@aria-label, '
-                        '"Крестик для закрытия")]').click()
                     continue
                 else:
                     driver.find_element_by_class_name(
