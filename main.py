@@ -243,13 +243,13 @@ def switch_account(driver, delay, account_name,
 
 
 def change_date_range(driver, delay, desired_date, seen_ranges):
-    slots_range_switcher = driver.find_element_by_xpath(
+    range_switcher = driver.find_element_by_xpath(
         '//div[contains(@class, "slots-range-switcher_dateSwitcher_34ExK")]')
-    slots_range_switcher_components = slots_range_switcher.find_elements_by_tag_name('div')
-    if len(slots_range_switcher_components) == 1:
+    range_switcher_components = range_switcher.find_elements_by_tag_name('div')
+    if len(range_switcher_components) == 1:
         return
     left_switcher, current_date_range_string,\
-        right_switcher = slots_range_switcher_components
+        right_switcher = range_switcher_components
     left_switcher_html = left_switcher.get_attribute('innerHTML')
     right_switcher_html = right_switcher.get_attribute('innerHTML')
     current_date_range = convert_date_range(current_date_range_string.text)
@@ -334,6 +334,16 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             )
             continue
         current_delivery_date_button.click()
+        timeslot_sidepage = driver.find_element_by_xpath(
+            '//div[contains(@class, '
+            '"side-page-content-module_sidePageContent_3QWFS typography-module'
+            '_body-500_y4OT3 time-slot-select-dialog_dialog_2bhKD")]')
+        if timeslot_sidepage.get_attribute('innerHTML').find(
+                'Нет доступных дней и времени') != -1:
+            delay()
+            driver.find_element_by_xpath('//button[contains(@aria-label, '
+                                         '"Крестик для закрытия")]').click()
+            continue
         delay()
         change_date_range(driver, delay, desired_date, [])
         available_date_range = convert_date_range(driver.find_element_by_xpath(
