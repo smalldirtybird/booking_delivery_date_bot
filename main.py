@@ -332,6 +332,12 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                 details['processed_cell'],
                 '1',
             )
+            date_update_message = f'''
+                \r:Желаемая дата поставки №{delivery_id} уже установлена:
+                \r{new_delivery_date}.
+                '''
+            tg_bot.send_message(chat_id=tg_chat_id,
+                                text=date_update_message)
             continue
         current_delivery_date_button.click()
         timeslot_sidepage = driver.find_element_by_xpath(
