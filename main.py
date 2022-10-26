@@ -80,31 +80,6 @@ def convert_date_range(date_range_string):
     return tuple(date_range)
 
 
-def get_slot_search_window(available_days, date_range, desired_date,
-                           current_date):
-    previous_date, last_date = date_range
-    date_list = []
-    print('Available delivery dates:')
-    for day in available_days:
-        date = previous_date.replace(day=int(day))
-        if date_list and date < date_list[available_days.index(day) - 1]:
-            date = date.replace(month=(date.month + 1))
-        print(date)
-        date_list.append(date)
-    suitable_dates = []
-    for date in date_list:
-        if date == desired_date or current_date < desired_date < date or \
-                current_date > desired_date and \
-                desired_date < date < current_date:
-            suitable_dates.append(date)
-    first_available_date_index = None
-    last_available_date_index = None
-    if suitable_dates:
-        first_available_date_index = date_list.index(min(suitable_dates))
-        last_available_date_index = date_list.index(max(suitable_dates))
-    return first_available_date_index, last_available_date_index
-
-
 def rotate_slots_table(slots, columns_quantity, first_column, last_column):
     slots_rotated = []
     column = 1
@@ -133,7 +108,7 @@ def prepare_webdriver(profile_path):
     profile.update_preferences()
     desired = DesiredCapabilities.FIREFOX
     options = Options()
-    options.add_argument('--headless')
+    # options.add_argument('--headless')
     driver = webdriver.Firefox(
         firefox_binary='/usr/bin/firefox',
         firefox_profile=profile,
@@ -271,6 +246,43 @@ def change_date_range(driver, delay, desired_date, seen_ranges):
         return
 
 
+def get_slot_search_window(driver, delay, desired_date, current_delivery_date):
+    available_date_range = convert_date_range(
+        driver.find_element_by_xpath(
+            '//div[contains(@class, '
+            '"slots-range-switcher_dateSwitcherInterval_220Nq")]').text
+    )
+    table_header = driver.find_element_by_xpath(
+        '//div[contains(@class, '
+        '"time-slots-table_slotsTableHead_ERvbR")]'
+    ).find_elements_by_class_name(
+            'time-slots-table_cellHeadDate_2VUyD')
+    available_days = []
+    for day in table_header:
+        available_days.append(day.text)
+    previous_date, last_date = available_date_range
+    date_list = []
+    print('Available delivery dates:')
+    for day in available_days:
+        date = previous_date.replace(day=int(day))
+        if date_list and date < date_list[available_days.index(day) - 1]:
+            date = date.replace(month=(date.month + 1))
+        print(date)
+        date_list.append(date)
+    suitable_dates = []
+    for date in date_list:
+        if date == desired_date or current_delivery_date < desired_date < date\
+                or current_delivery_date > desired_date and \
+                desired_date < date < current_delivery_date:
+            suitable_dates.append(date)
+    first_available_date_index = None
+    last_available_date_index = None
+    if suitable_dates:
+        first_available_date_index = date_list.index(min(suitable_dates))
+        last_available_date_index = date_list.index(max(suitable_dates))
+    return first_available_date_index, last_available_date_index
+
+
 def choose_delivery_date(driver, delay, delivery_date_requirements,
                          google_credentials, table_name, sheet_name, tg_bot,
                          tg_chat_id, account_name):
@@ -349,35 +361,12 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             delay()
             driver.find_element_by_xpath('//button[contains(@aria-label, '
                                          '"Крестик для закрытия")]').click()
-            update_spreadsheet(
-                google_credentials,
-                table_name,
-                sheet_name,
-                details['current_delivery_date_cell_coordinates'],
-                current_delivery_date_button.text,
-            )
-            update_spreadsheet(
-                google_credentials,
-                table_name,
-                sheet_name,
-                details['processed_cell'],
-                '0',
-            )
             continue
         delay()
         change_date_range(driver, delay, desired_date, [])
-        available_date_range = convert_date_range(driver.find_element_by_xpath(
-            '//div[contains(@class, '
-            '"slots-range-switcher_dateSwitcherInterval_220Nq")]').text)
-        available_days = driver.find_element_by_xpath(
-            '//div[contains(@class, "time-slots-table_slotsTableHead_ERvbR")]')
-        available_dates = []
-        for day in available_days.find_elements_by_class_name(
-                'time-slots-table_cellHeadDate_2VUyD'):
-            available_dates.append(day.text)
         first_border, last_border = get_slot_search_window(
-            available_dates,
-            available_date_range,
+            driver,
+            delay,
             desired_date,
             current_delivery_date,
         )
