@@ -291,9 +291,9 @@ def get_slot_search_window(driver, delay, desired_date, current_delivery_date):
 def choose_delivery_date(driver, delay, delivery_date_requirements,
                          google_credentials, table_name, sheet_name, tg_bot,
                          tg_chat_id, account_name):
-    logger.info(f'Старт обработки таблицы {table_name}')
+    logger.info(f'Старт обработки таблицы {table_name}.')
     for delivery_id, details in delivery_date_requirements.items():
-        logger.info(f'Обработка поставки {delivery_id}')
+        logger.info(f'Обработка поставки {delivery_id}.')
         search_field_button = WebDriverWait(driver, 20).until(
             expected_conditions.element_to_be_clickable((
                 By.XPATH,
