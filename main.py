@@ -323,27 +323,29 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
         current_delivery_date_button = driver.find_element_by_xpath(
             '//span[contains(@class, '
             '"orders-table-body-module_dateCell_tKzib")]')
+        current_delivery_date_string = current_delivery_date_button.text
         current_delivery_date = datetime.strptime(
-            current_delivery_date_button.text,
+            current_delivery_date_string,
             '%d.%m.%Y',
         ).date()
         desired_date = details['min_date']
+        update_details = partial(
+            update_spreadsheet,
+            google_credentials=google_credentials,
+            table_name=table_name,
+            sheet_name=sheet_name,
+        )
         if current_delivery_date == desired_date:
             print('Desired date already set.')
-            update_spreadsheet(
-                google_credentials,
-                table_name,
-                sheet_name,
-                details['current_delivery_date_cell_coordinates'],
-                current_delivery_date_button.text,
-            )
-            update_spreadsheet(
-                google_credentials,
-                table_name,
-                sheet_name,
+            search_is_finished = 1
+            update_details(
+                details['current_delivery_date_cell'],
+                current_delivery_date_string,
+                )
+            update_details(
                 details['processed_cell'],
-                '1',
-            )
+                search_is_finished,
+                )
             date_update_message = f'''
                 \r:Желаемая дата поставки №{delivery_id} уже установлена:
                 \r{current_delivery_date}.
@@ -373,20 +375,15 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
         if first_border is None:
             driver.find_element_by_xpath('//button[contains(@aria-label, '
                                          '"Крестик для закрытия")]').click()
-            update_spreadsheet(
-                google_credentials,
-                table_name,
-                sheet_name,
-                details['current_delivery_date_cell_coordinates'],
-                current_delivery_date_button.text,
-            )
-            update_spreadsheet(
-                google_credentials,
-                table_name,
-                sheet_name,
+            search_is_finished = 0
+            update_details(
+                details['current_delivery_date_cell'],
+                current_delivery_date_string,
+                )
+            update_details(
                 details['processed_cell'],
-                '0',
-            )
+                search_is_finished,
+                )
             continue
         datetime_slots = driver.find_element_by_class_name(
             'time-slots-table_slotsTableContentContainer_1Z9BS')
@@ -422,20 +419,15 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                     driver.find_element_by_xpath(
                         '//button[contains(@aria-label, '
                         '"Крестик для закрытия")]').click()
-                    update_spreadsheet(
-                        google_credentials,
-                        table_name,
-                        sheet_name,
-                        details['current_delivery_date_cell_coordinates'],
-                        current_delivery_date_button.text,
-                    )
-                    update_spreadsheet(
-                        google_credentials,
-                        table_name,
-                        sheet_name,
+                    search_is_finished = 0
+                    update_details(
+                        details['current_delivery_date_cell'],
+                        current_delivery_date_string,
+                        )
+                    update_details(
                         details['processed_cell'],
-                        '0',
-                    )
+                        search_is_finished,
+                        )
                     break
                 elif formatted_chosen_date < desired_date:
                     slot.click()
@@ -445,40 +437,28 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                     driver.find_element_by_class_name(
                         'custom-button_text_2H7oV').click()
                 delay()
-                new_delivery_date = driver.find_element_by_xpath(
+                new_delivery_date_string = driver.find_element_by_xpath(
                     '//span[contains(@class, '
                     '"orders-table-body-module_dateCell_tKzib")]').text
-                update_spreadsheet(
-                    google_credentials,
-                    table_name,
-                    sheet_name,
-                    details['current_delivery_date_cell_coordinates'],
-                    new_delivery_date,
-                )
-                print(f'Set new delivery date: {new_delivery_date}')
+                new_delivery_date = datetime.strptime(
+                    new_delivery_date_string,
+                    '%d.%m.%Y').date()
+                search_is_finished = int(new_delivery_date == desired_date)
+                update_details(
+                    details['current_delivery_date_cell'],
+                    new_delivery_date_string,
+                    )
+                update_details(
+                    details['processed_cell'],
+                    search_is_finished,
+                    )
+                print(f'Set new delivery date: {new_delivery_date_string}')
                 date_update_message = f'''
                                 \rДата поставки №{delivery_id} обновлена.
-                                \rНовая дата поставки: {new_delivery_date}.
+                                \rНовая дата поставки: {new_delivery_date_string}.
                                 '''
                 tg_bot.send_message(chat_id=tg_chat_id,
                                     text=date_update_message)
-                if datetime.strptime(new_delivery_date, '%d.%m.%Y').date() == \
-                        desired_date:
-                    update_spreadsheet(
-                        google_credentials,
-                        table_name,
-                        sheet_name,
-                        details['processed_cell'],
-                        '1',
-                    )
-                else:
-                    update_spreadsheet(
-                        google_credentials,
-                        table_name,
-                        sheet_name,
-                        details['processed_cell'],
-                        '0',
-                    )
                 break
             driver.refresh()
             delay()
