@@ -365,6 +365,15 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             delay()
             driver.find_element_by_xpath('//button[contains(@aria-label, '
                                          '"Крестик для закрытия")]').click()
+            search_is_finished = 0
+            update_details(
+                details['current_delivery_date_cell'],
+                current_delivery_date_string,
+            )
+            update_details(
+                details['processed_cell'],
+                search_is_finished,
+            )   
             logger.info('Не обнаружено подходящих слотов.')
             continue
         delay()
