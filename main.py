@@ -325,9 +325,25 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             delay()
             continue
         logger.info(f'Поставка {delivery_id} найдена.')
+        current_data_button_class = 'orders-table-body-module_dateCell_tKzib'
+        table_row_html = driver.find_element_by_xpath(
+            '//tr[contains(@class, table-row-module_row_3MYa0 '
+            'table-row-module_hoverable_3x5QF)]').get_attribute('innerHTML')
+        if table_row_html.find(current_data_button_class) == -1:
+            search_is_finished = 0
+            update_details(
+                details['current_delivery_date_cell'],
+                current_delivery_date_string,
+            )
+            update_details(
+                details['processed_cell'],
+                search_is_finished,
+            )
+            logger.info('Не обнаружено подходящих слотов.')
+            continue
         current_delivery_date_button = driver.find_element_by_xpath(
             '//span[contains(@class, '
-            '"orders-table-body-module_dateCell_tKzib")]')
+            f'"{current_data_button_class}")]')
         current_delivery_date_string = current_delivery_date_button.text
         current_delivery_date = datetime.strptime(
             current_delivery_date_string,
