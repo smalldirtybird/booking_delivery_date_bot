@@ -326,28 +326,23 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             continue
         logger.info(f'Поставка {delivery_id} найдена.')
         current_data_button_class = 'orders-table-body-module_dateCell_tKzib'
-        table_row_html = driver.find_element_by_xpath(
-            '//tbody').get_attribute('innerHTML')
+        table_row = driver.find_element_by_xpath(
+            '//tbody')
+        table_row_html = table_row.get_attribute('innerHTML')
         if table_row_html.find(current_data_button_class) == -1:
-            search_is_finished = 0
-            update_details(
-                details['current_delivery_date_cell'],
+            current_delivery_date = datetime.now().date() + timedelta(weeks=10)
+            current_delivery_date_string = current_delivery_date.strftime(
+                '%d.%m.%Y')
+            current_delivery_date_button = driver.find_element_by_xpath(
+                '//button[contains(text(), "Выбрать")]')
+        else:
+            current_delivery_date_button = driver.find_element_by_xpath(
+                f'//span[contains(@class, "{current_data_button_class}")]')
+            current_delivery_date_string = current_delivery_date_button.text
+            current_delivery_date = datetime.strptime(
                 current_delivery_date_string,
-            )
-            update_details(
-                details['processed_cell'],
-                search_is_finished,
-            )
-            logger.info('Не обнаружено подходящих слотов.')
-            continue
-        current_delivery_date_button = driver.find_element_by_xpath(
-            '//span[contains(@class, '
-            f'"{current_data_button_class}")]')
-        current_delivery_date_string = current_delivery_date_button.text
-        current_delivery_date = datetime.strptime(
-            current_delivery_date_string,
-            '%d.%m.%Y',
-        ).date()
+                '%d.%m.%Y',
+            ).date()
         desired_date = details['min_date']
         update_details = partial(
             update_spreadsheet,
@@ -388,7 +383,7 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             update_details(
                 details['processed_cell'],
                 search_is_finished,
-            )   
+            )
             logger.info('Не обнаружено подходящих слотов.')
             continue
         delay()
@@ -599,7 +594,7 @@ def main():
             )
     except Exception:
         logger.exception(
-            f'Бот упал и будет перезапущен. Ошибка:')
+            'Бот упал и будет перезапущен. Ошибка:')
         os.system('pkill firefox')
         os.system(f'python3 {__file__}')
 
