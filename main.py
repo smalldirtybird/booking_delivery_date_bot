@@ -327,8 +327,7 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
         logger.info(f'Поставка {delivery_id} найдена.')
         current_data_button_class = 'orders-table-body-module_dateCell_tKzib'
         table_row_html = driver.find_element_by_xpath(
-            '//tr[contains(@class, table-row-module_row_3MYa0 '
-            'table-row-module_hoverable_3x5QF)]').get_attribute('innerHTML')
+            '//tbody').get_attribute('innerHTML')
         if table_row_html.find(current_data_button_class) == -1:
             search_is_finished = 0
             update_details(
