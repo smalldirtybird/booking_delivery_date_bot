@@ -33,7 +33,7 @@ def get_delivery_date_requirements(google_credentials, table_name, sheet_name,
                     'max_date': datetime.strptime(row[2], '%d.%m.%Y').date(),
                     'assembly_time': assembly_time,
                     'current_delivery_date': current_delivery_date,
-                    'current_delivery_date_cell_coordinates': f'E{row_number}',
+                    'current_delivery_date_cell': f'E{row_number}',
                     'processed_cell': f'G{row_number}'
                 }
         except ValueError:
@@ -41,10 +41,11 @@ def get_delivery_date_requirements(google_credentials, table_name, sheet_name,
     return delivery_date_requirements
 
 
-def update_spreadsheet(google_credentials, table_name, sheet_name,
-                       cell_coordinates, cell_new_value):
+def update_spreadsheet(cell_coordinates, cell_new_value, google_credentials,
+                       table_name, sheet_name,
+                       ):
     table = gspread.service_account(google_credentials).open(table_name)
-    table.worksheet(sheet_name).update(cell_coordinates, cell_new_value)
+    table.worksheet(sheet_name).update(cell_coordinates, str(cell_new_value))
 
 
 def main():
