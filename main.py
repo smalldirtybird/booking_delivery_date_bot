@@ -100,6 +100,20 @@ def rotate_slots_table(slots, columns_quantity, first_column, last_column):
     return slots_rotated[lower_border:upper_border]
 
 
+def limit_hour_rows(slots_table, upper_timeslot, lower_timeslot):
+    column_starts = 0
+    column_ends = 23
+    current_row = column_ends
+    limited_slots_table = []
+    for slot in slots_table:
+        if upper_timeslot <= current_row <= lower_timeslot:
+            limited_slots_table.append(slot)
+        current_row -= 1
+        if current_row == column_starts - 1:
+            current_row = column_ends
+    return limited_slots_table
+
+
 def prepare_webdriver(profile_path):
     geckodriver_autoinstaller.install()
     profile = webdriver.FirefoxProfile(profile_path)
@@ -290,7 +304,8 @@ def get_slot_search_window(driver, delay, desired_date, current_delivery_date):
 
 def choose_delivery_date(driver, delay, delivery_date_requirements,
                          google_credentials, table_name, sheet_name, tg_bot,
-                         tg_chat_id, account_name):
+                         tg_chat_id, account_name, special_storages,
+                         upper_timeslot, lower_timeslot):
     logger.info(f'Старт обработки таблицы {table_name}.')
     for delivery_id, details in delivery_date_requirements.items():
         logger.info(f'Обработка поставки {delivery_id}.')
@@ -329,6 +344,17 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
         table_row = driver.find_element_by_xpath(
             '//tbody')
         table_row_html = table_row.get_attribute('innerHTML')
+        storage_name = driver.find_element_by_xpath(
+            '//div[contains(@class, '
+            '"orders-table-body-module_supplyWarehouseCell_3VyP7")]'
+        ).text
+        current_delivery_timeslot = driver.find_element_by_xpath(
+            '//div[contains(@class, '
+            '"orders-table-body-module_cellAdditionalText_3McBH '
+            'orders-table-body-module_tdAdditionalText_1IduN")]'
+        ).text
+        timeslot_start_hour, *_ = current_delivery_timeslot.split(sep=':')
+        storage_is_special = bool(storage_name in special_storages)
         if table_row_html.find(current_data_button_class) == -1:
             current_delivery_date = datetime.now().date() + timedelta(weeks=10)
             current_delivery_date_string = current_delivery_date.strftime(
@@ -350,7 +376,9 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             table_name=table_name,
             sheet_name=sheet_name,
         )
-        if current_delivery_date == desired_date:
+        if current_delivery_date == desired_date and (
+                not storage_is_special or storage_is_special and
+                upper_timeslot <= timeslot_start_hour <= lower_timeslot):
             search_is_finished = 1
             update_details(
                 details['current_delivery_date_cell'],
@@ -371,7 +399,7 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             '"side-page-content-module_sidePageContent_3QWFS typography-module'
             '_body-500_y4OT3 time-slot-select-dialog_dialog_2bhKD")]')
         if timeslot_sidepage.get_attribute('innerHTML').find(
-                'Нет доступных дней и времени') != -1:
+                'Нет доступных дней и времени') == -1:
             delay()
             driver.find_element_by_xpath('//button[contains(@aria-label, '
                                          '"Крестик для закрытия")]').click()
@@ -384,7 +412,7 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                 details['processed_cell'],
                 search_is_finished,
             )
-            logger.info('Не обнаружено подходящих слотов.')
+            logger.info('Нет доступных дней и времени.')
             continue
         delay()
         change_date_range(driver, delay, desired_date, [])
@@ -417,6 +445,12 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             first_border,
             last_border,
         )
+        if storage_is_special:
+            slots_table = limit_hour_rows(
+                slots_table,
+                int(upper_timeslot),
+                int(lower_timeslot),
+            )
         for slot in slots_table:
             if slot.get_attribute('innerHTML').find(
                     'table_emptyCell_dxX7v') == -1:
@@ -508,7 +542,8 @@ def handle_statement(profile_path, ozon_delivery_page_url, delay,
                      ozon_login_email, yandex_email, yandex_password,
                      account_name, delivery_date_requirements, sleep_time,
                      google_spreadsheet_credentials, table_name, sheet_name,
-                     tg_bot, tg_chat_id):
+                     tg_bot, tg_chat_id, special_storages, upper_timeslot,
+                     lower_timeslot):
     global STATE
     global web_driver
     global start_time
@@ -545,6 +580,9 @@ def handle_statement(profile_path, ozon_delivery_page_url, delay,
             tg_bot=tg_bot,
             tg_chat_id=tg_chat_id,
             account_name=account_name,
+            special_storages=special_storages,
+            upper_timeslot=upper_timeslot,
+            lower_timeslot=lower_timeslot,
         ),
         'WAIT': partial(wait, sleep_time=sleep_time),
         'BLOCKING_WORKED': handle_blocking,
@@ -591,6 +629,9 @@ def main():
                 os.environ['SHEET_NAME'],
                 tg_bot,
                 tg_chat_id,
+                os.environ['SPECIAL_STORAGES'].split(sep=','),
+                os.environ['UPPER_TIMESLOT'],
+                os.environ['LOWER_TIMESLOT'],
             )
     except Exception:
         logger.exception(
