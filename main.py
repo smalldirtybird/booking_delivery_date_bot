@@ -198,8 +198,7 @@ def authenticate_with_email(driver, delay, ozon_login_email, yandex_email,
         return 'SWITCH_ACCOUNT'
 
 
-def select_account(driver, delay, account_name,
-                   ozon_delivery_page_url):
+def select_account(driver, delay, account_name, ozon_delivery_page_url):
     logger.info(f'Переключение на аккаунт {account_name}')
     driver.find_element_by_xpath(
         f'//div[contains(text(), "{account_name}")]').click()
@@ -215,8 +214,7 @@ def select_account(driver, delay, account_name,
         return 'DELIVERY_MANAGEMENT'
 
 
-def switch_account(driver, delay, account_name,
-                   ozon_delivery_page_url):
+def switch_account(driver, delay, account_name, ozon_delivery_page_url):
     logger.info(f'Переключение на аккаунт {account_name}')
     current_account_button = driver.find_element_by_xpath(
         '//span[contains(@class, '
@@ -303,9 +301,9 @@ def get_slot_search_window(driver, delay, desired_date, current_delivery_date):
 
 
 def choose_delivery_date(driver, delay, delivery_date_requirements,
-                         google_credentials, table_name, sheet_name, tg_bot,
-                         tg_chat_id, account_name, special_storages,
-                         upper_timeslot, lower_timeslot):
+                         google_credentials, table_name, sheet_name,
+                         account_name, special_storages, upper_timeslot,
+                         lower_timeslot):
     logger.info(f'Старт обработки таблицы {table_name}.')
     for delivery_id, details in delivery_date_requirements.items():
         logger.info(f'Обработка поставки {delivery_id}.')
@@ -542,8 +540,7 @@ def handle_statement(profile_path, ozon_delivery_page_url, delay,
                      ozon_login_email, yandex_email, yandex_password,
                      account_name, delivery_date_requirements, sleep_time,
                      google_spreadsheet_credentials, table_name, sheet_name,
-                     tg_bot, tg_chat_id, special_storages, upper_timeslot,
-                     lower_timeslot):
+                     special_storages, upper_timeslot, lower_timeslot):
     global STATE
     global web_driver
     global start_time
@@ -577,8 +574,6 @@ def handle_statement(profile_path, ozon_delivery_page_url, delay,
             google_credentials=google_spreadsheet_credentials,
             table_name=table_name,
             sheet_name=sheet_name,
-            tg_bot=tg_bot,
-            tg_chat_id=tg_chat_id,
             account_name=account_name,
             special_storages=special_storages,
             upper_timeslot=upper_timeslot,
@@ -627,8 +622,6 @@ def main():
                 os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
                 os.environ['TABLE_NAME'],
                 os.environ['SHEET_NAME'],
-                tg_bot,
-                tg_chat_id,
                 os.environ['SPECIAL_STORAGES'].split(sep=','),
                 os.environ['UPPER_TIMESLOT'],
                 os.environ['LOWER_TIMESLOT'],
