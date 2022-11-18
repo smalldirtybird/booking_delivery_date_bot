@@ -307,6 +307,10 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
     logger.info(f'Старт обработки таблицы {table_name}.')
     for delivery_id, details in delivery_date_requirements.items():
         logger.info(f'Обработка поставки {delivery_id}.')
+        if driver.page_source.find(
+                'popup-footer-module_footer_QFh20 popup_footer_o5aCa') != -1:
+            driver.find_element_by_xpath(
+               '//span[contains(text(), "Напомнить позже")]').click()
         search_field_button = WebDriverWait(driver, 20).until(
             expected_conditions.element_to_be_clickable((
                 By.XPATH,
