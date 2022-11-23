@@ -123,7 +123,7 @@ def prepare_webdriver(profile_path):
     profile.update_preferences()
     desired = DesiredCapabilities.FIREFOX
     options = Options()
-    # options.add_argument('--headless')
+    options.add_argument('--headless')
     driver = webdriver.Firefox(
         firefox_binary='/usr/bin/firefox',
         firefox_profile=profile,
@@ -301,11 +301,23 @@ def get_slot_search_window(driver, delay, desired_date, current_delivery_date):
     return first_available_date_index, last_available_date_index
 
 
-def choose_delivery_date(driver, delay, delivery_date_requirements,
-                         google_credentials, table_name,
+def choose_delivery_date(driver, delay, google_credentials, table_name,
                          requirements_sheet_name, account_name,
-                         storage_settings):
+                         storage_sheet_name):
     logger.info(f'Старт обработки таблицы {table_name}.')
+    delivery_date_requirements = get_delivery_date_requirements(
+        google_credentials,
+        table_name,
+        requirements_sheet_name,
+        account_name,
+    ),
+    storage_settings = get_storage_settings(
+        google_credentials,
+        table_name,
+        storage_sheet_name,
+    )
+    if type(delivery_date_requirements) is tuple:
+        delivery_date_requirements = delivery_date_requirements[0]
     for delivery_id, details in delivery_date_requirements.items():
         logger.info(f'Обработка поставки {delivery_id}.')
         if driver.page_source.find(
@@ -463,7 +475,6 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             if slot.get_attribute('innerHTML').find(
                     'table_emptyCell_dxX7v') == -1:
                 slot.click()
-                delay()
             else:
                 continue
             if slot.get_attribute('innerHTML').find(
@@ -499,6 +510,13 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
                     slot.click()
                     delay()
                     continue
+                elif driver.find_element_by_xpath(
+                        '//span[contains(@class, "time-slot-select-dialog_subm'
+                        'itButton_b2nbQ")]').get_attribute('outerHTML').find(
+                        'disabled="disabled"') != -1:
+                    driver.find_element_by_xpath(
+                        '//button[contains(@aria-label, '
+                        '"Крестик для закрытия")]').click()
                 else:
                     driver.find_element_by_class_name(
                         'custom-button_text_2H7oV').click()
@@ -548,9 +566,9 @@ def handle_blocking(driver, delay):
 
 def handle_statement(profile_path, ozon_delivery_page_url, delay,
                      ozon_login_email, yandex_email, yandex_password,
-                     account_name, delivery_date_requirements, sleep_time,
+                     account_name, sleep_time,
                      google_spreadsheet_credentials, table_name,
-                     requirements_sheet_name, storage_settings):
+                     requirements_sheet_name, storage_sheet_name):
     global STATE
     global web_driver
     global start_time
@@ -580,12 +598,11 @@ def handle_statement(profile_path, ozon_delivery_page_url, delay,
         ),
         'DELIVERY_MANAGEMENT': partial(
             choose_delivery_date,
-            delivery_date_requirements=delivery_date_requirements,
             google_credentials=google_spreadsheet_credentials,
             table_name=table_name,
             requirements_sheet_name=requirements_sheet_name,
             account_name=account_name,
-            storage_settings=storage_settings,
+            storage_sheet_name=storage_sheet_name,
         ),
         'WAIT': partial(wait, sleep_time=sleep_time),
         'BLOCKING_WORKED': handle_blocking,
@@ -605,7 +622,6 @@ def main():
         delay_ceil = os.environ['ACTION_DELAY_CEIL']
         ozon_url = 'https://seller.ozon.ru/app/supply/' \
                    'orders?filter=SupplyPreparation'
-        account_name = os.environ['ACCOUNT_NAME']
         delay = partial(
                     human_action_delay,
                     floor=delay_floor,
@@ -619,21 +635,12 @@ def main():
                 ozon_login_email,
                 os.environ['YANDEX_EMAIL'],
                 os.environ['YANDEX_PASSWORD'],
-                account_name,
-                get_delivery_date_requirements(
-                    os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
-                    os.environ['TABLE_NAME'],
-                    os.environ['REQUIREMENTS_SHEET_NAME'],
-                    os.environ['ACCOUNT_NAME'],
-                ),
+                os.environ['ACCOUNT_NAME'],
                 os.environ['SLEEP_TIME_MINUTES'],
                 os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
                 os.environ['TABLE_NAME'],
                 os.environ['REQUIREMENTS_SHEET_NAME'],
-                get_storage_settings(
-                    os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
-                    os.environ['TABLE_NAME'],
-                    os.environ['STORAGE_SETTINGS_SHEET_NAME'],)
+                os.environ['STORAGE_SETTINGS_SHEET_NAME'],
             )
     except Exception:
         logger.exception(
