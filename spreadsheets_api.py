@@ -1,9 +1,6 @@
-import os
 from datetime import datetime, timedelta
-from pprint import pprint
 
 import gspread
-from dotenv import load_dotenv
 
 
 def get_delivery_date_requirements(google_credentials, table_name,
@@ -51,24 +48,19 @@ def update_spreadsheet(cell_coordinates, cell_new_value, google_credentials,
     )
 
 
-def main():
-    load_dotenv()
-    delivery_date_requirements = get_delivery_date_requirements(
-        os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
-        os.environ['TABLE_NAME'],
-        os.environ['SHEET_NAME'],
-        os.environ['ACCOUNT_NAME'],
-    )
-    pprint(delivery_date_requirements)
-    for delivery_id, details in delivery_date_requirements.items():
-        update_spreadsheet(
-            os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
-            os.environ['TABLE_NAME'],
-            os.environ['SHEET_NAME'],
-            details['current_delivery_date_cell_coordinates'],
-            datetime.now().date().strftime('%d.%m.%Y'),
+def get_storage_settings(google_credentials, table_name,
+                         storage_settings_sheet_name):
+    table = gspread.service_account(google_credentials).open(table_name)
+    worksheet = table.worksheet(storage_settings_sheet_name)
+    storage_settings = {}
+    spreadsheet = worksheet.get_all_values()[1:]
+    for row in spreadsheet:
+        storage_settings.update(
+            {
+                row[0]: {
+                    'upper_timeslot': row[1],
+                    'lower_timeslot': row[2],
+                }
+            }
         )
-
-
-if __name__ == '__main__':
-    main()
+    return storage_settings

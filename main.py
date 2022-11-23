@@ -19,7 +19,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from telegram import Bot
 
 from clear_temp_folder import clear_temp_folder
-from spreadsheets_api import get_delivery_date_requirements, update_spreadsheet
+from spreadsheets_api import (get_delivery_date_requirements,
+                              get_storage_settings, update_spreadsheet)
 from yandex_mail import get_verification_code
 
 logger = logging.getLogger('TelegramLogger')
@@ -122,7 +123,7 @@ def prepare_webdriver(profile_path):
     profile.update_preferences()
     desired = DesiredCapabilities.FIREFOX
     options = Options()
-    options.add_argument('--headless')
+    # options.add_argument('--headless')
     driver = webdriver.Firefox(
         firefox_binary='/usr/bin/firefox',
         firefox_profile=profile,
@@ -303,7 +304,7 @@ def get_slot_search_window(driver, delay, desired_date, current_delivery_date):
 def choose_delivery_date(driver, delay, delivery_date_requirements,
                          google_credentials, table_name,
                          requirements_sheet_name, account_name,
-                         special_storages, upper_timeslot, lower_timeslot):
+                         storage_settings):
     logger.info(f'Старт обработки таблицы {table_name}.')
     for delivery_id, details in delivery_date_requirements.items():
         logger.info(f'Обработка поставки {delivery_id}.')
@@ -356,7 +357,9 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             'orders-table-body-module_tdAdditionalText_1IduN")]'
         ).text
         timeslot_start_hour, *_ = current_delivery_timeslot.split(sep=':')
-        storage_is_special = bool(storage_name in special_storages)
+        storage_is_special = bool(storage_name in storage_settings.keys())
+        # upper_timeslot = 0
+        # lower_timeslot = 23
         if table_row_html.find(current_data_button_class) == -1:
             current_delivery_date = datetime.now().date() + timedelta(weeks=10)
             current_delivery_date_string = current_delivery_date.strftime(
@@ -378,6 +381,9 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             table_name=table_name,
             requirements_sheet_name=requirements_sheet_name,
         )
+        if storage_is_special:
+            upper_timeslot = storage_settings[storage_name]['upper_timeslot']
+            lower_timeslot = storage_settings[storage_name]['lower_timeslot']
         if current_delivery_date == desired_date and (
                 not storage_is_special or storage_is_special and
                 upper_timeslot <= timeslot_start_hour <= lower_timeslot):
@@ -525,7 +531,7 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
 def wait(driver, delay, sleep_time):
     global start_time
     driver.close()
-    wakeup_time = start_time + timedelta(minutes=sleep_time)
+    wakeup_time = start_time + timedelta(minutes=int(sleep_time))
     left_time_to_sleep = wakeup_time - datetime.now()
     logger.info(f'Следующий запуск в {wakeup_time}.')
     if left_time_to_sleep > timedelta(seconds=0):
@@ -544,8 +550,7 @@ def handle_statement(profile_path, ozon_delivery_page_url, delay,
                      ozon_login_email, yandex_email, yandex_password,
                      account_name, delivery_date_requirements, sleep_time,
                      google_spreadsheet_credentials, table_name,
-                     requirements_sheet_name, special_storages, upper_timeslot,
-                     lower_timeslot):
+                     requirements_sheet_name, storage_settings):
     global STATE
     global web_driver
     global start_time
@@ -580,9 +585,7 @@ def handle_statement(profile_path, ozon_delivery_page_url, delay,
             table_name=table_name,
             requirements_sheet_name=requirements_sheet_name,
             account_name=account_name,
-            special_storages=special_storages,
-            upper_timeslot=upper_timeslot,
-            lower_timeslot=lower_timeslot,
+            storage_settings=storage_settings,
         ),
         'WAIT': partial(wait, sleep_time=sleep_time),
         'BLOCKING_WORKED': handle_blocking,
@@ -623,13 +626,14 @@ def main():
                     os.environ['REQUIREMENTS_SHEET_NAME'],
                     os.environ['ACCOUNT_NAME'],
                 ),
-                int(os.environ['SLEEP_TIME_MINUTES']),
+                os.environ['SLEEP_TIME_MINUTES'],
                 os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
                 os.environ['TABLE_NAME'],
                 os.environ['REQUIREMENTS_SHEET_NAME'],
-                os.environ['SPECIAL_STORAGES'].split(sep=','),
-                os.environ['UPPER_TIMESLOT'],
-                os.environ['LOWER_TIMESLOT'],
+                get_storage_settings(
+                    os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
+                    os.environ['TABLE_NAME'],
+                    os.environ['STORAGE_SETTINGS_SHEET_NAME'],)
             )
     except Exception:
         logger.exception(
