@@ -6,10 +6,10 @@ import gspread
 from dotenv import load_dotenv
 
 
-def get_delivery_date_requirements(google_credentials, table_name, sheet_name,
-                                   account_name):
+def get_delivery_date_requirements(google_credentials, table_name,
+                                   requirements_sheet_name, account_name):
     table = gspread.service_account(google_credentials).open(table_name)
-    worksheet = table.worksheet(sheet_name)
+    worksheet = table.worksheet(requirements_sheet_name)
     delivery_date_requirements = {}
     spreadsheet = worksheet.get_all_values()[1:]
     for row in spreadsheet:
@@ -42,10 +42,13 @@ def get_delivery_date_requirements(google_credentials, table_name, sheet_name,
 
 
 def update_spreadsheet(cell_coordinates, cell_new_value, google_credentials,
-                       table_name, sheet_name,
+                       table_name, requirements_sheet_name,
                        ):
     table = gspread.service_account(google_credentials).open(table_name)
-    table.worksheet(sheet_name).update(cell_coordinates, str(cell_new_value))
+    table.worksheet(requirements_sheet_name).update(
+        cell_coordinates,
+        str(cell_new_value),
+    )
 
 
 def main():

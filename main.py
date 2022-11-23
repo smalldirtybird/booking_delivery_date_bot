@@ -301,9 +301,9 @@ def get_slot_search_window(driver, delay, desired_date, current_delivery_date):
 
 
 def choose_delivery_date(driver, delay, delivery_date_requirements,
-                         google_credentials, table_name, sheet_name,
-                         account_name, special_storages, upper_timeslot,
-                         lower_timeslot):
+                         google_credentials, table_name,
+                         requirements_sheet_name, account_name,
+                         special_storages, upper_timeslot, lower_timeslot):
     logger.info(f'Старт обработки таблицы {table_name}.')
     for delivery_id, details in delivery_date_requirements.items():
         logger.info(f'Обработка поставки {delivery_id}.')
@@ -376,7 +376,7 @@ def choose_delivery_date(driver, delay, delivery_date_requirements,
             update_spreadsheet,
             google_credentials=google_credentials,
             table_name=table_name,
-            sheet_name=sheet_name,
+            requirements_sheet_name=requirements_sheet_name,
         )
         if current_delivery_date == desired_date and (
                 not storage_is_special or storage_is_special and
@@ -543,8 +543,9 @@ def handle_blocking(driver, delay):
 def handle_statement(profile_path, ozon_delivery_page_url, delay,
                      ozon_login_email, yandex_email, yandex_password,
                      account_name, delivery_date_requirements, sleep_time,
-                     google_spreadsheet_credentials, table_name, sheet_name,
-                     special_storages, upper_timeslot, lower_timeslot):
+                     google_spreadsheet_credentials, table_name,
+                     requirements_sheet_name, special_storages, upper_timeslot,
+                     lower_timeslot):
     global STATE
     global web_driver
     global start_time
@@ -577,7 +578,7 @@ def handle_statement(profile_path, ozon_delivery_page_url, delay,
             delivery_date_requirements=delivery_date_requirements,
             google_credentials=google_spreadsheet_credentials,
             table_name=table_name,
-            sheet_name=sheet_name,
+            requirements_sheet_name=requirements_sheet_name,
             account_name=account_name,
             special_storages=special_storages,
             upper_timeslot=upper_timeslot,
@@ -619,13 +620,13 @@ def main():
                 get_delivery_date_requirements(
                     os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
                     os.environ['TABLE_NAME'],
-                    os.environ['SHEET_NAME'],
+                    os.environ['REQUIREMENTS_SHEET_NAME'],
                     os.environ['ACCOUNT_NAME'],
                 ),
                 int(os.environ['SLEEP_TIME_MINUTES']),
                 os.environ['GOOGLE_SPREADSHEET_CREDENTIALS'],
                 os.environ['TABLE_NAME'],
-                os.environ['SHEET_NAME'],
+                os.environ['REQUIREMENTS_SHEET_NAME'],
                 os.environ['SPECIAL_STORAGES'].split(sep=','),
                 os.environ['UPPER_TIMESLOT'],
                 os.environ['LOWER_TIMESLOT'],
