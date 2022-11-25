@@ -123,7 +123,7 @@ def prepare_webdriver(profile_path):
     profile.update_preferences()
     desired = DesiredCapabilities.FIREFOX
     options = Options()
-    # options.add_argument('--headless')
+    options.add_argument('--headless')
     driver = webdriver.Firefox(
         firefox_binary='/usr/bin/firefox',
         firefox_profile=profile,
@@ -371,8 +371,6 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
         ).text
         timeslot_start_hour, *_ = current_delivery_timeslot.split(sep=':')
         storage_is_special = bool(storage_name in storage_settings.keys())
-        # upper_timeslot = 0
-        # lower_timeslot = 23
         if table_row_html.find(current_data_button_class) == -1:
             current_delivery_date = datetime.now().date() + timedelta(weeks=10)
             current_delivery_date_string = current_delivery_date.strftime(
