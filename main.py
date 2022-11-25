@@ -123,7 +123,7 @@ def prepare_webdriver(profile_path):
     profile.update_preferences()
     desired = DesiredCapabilities.FIREFOX
     options = Options()
-    options.add_argument('--headless')
+    # options.add_argument('--headless')
     driver = webdriver.Firefox(
         firefox_binary='/usr/bin/firefox',
         firefox_profile=profile,
@@ -224,6 +224,7 @@ def switch_account(driver, delay, account_name, ozon_delivery_page_url):
         return'DELIVERY_MANAGEMENT'
     else:
         current_account_button.click()
+        delay()
         driver.find_element_by_xpath(
             f'//div[contains(text(), "{account_name}")]').click()
         delay()
@@ -418,11 +419,12 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
             '//div[contains(@class, '
             '"side-page-content-module_sidePageContent_3QWFS typography-module'
             '_body-500_y4OT3 time-slot-select-dialog_dialog_2bhKD")]')
+        cross_button = driver.find_element_by_xpath(
+            '//button[contains(@aria-label, "Крестик для закрытия")]')
         if timeslot_sidepage.get_attribute('innerHTML').find(
                 'Нет доступных дней и времени') == -1:
             delay()
-            driver.find_element_by_xpath('//button[contains(@aria-label, '
-                                         '"Крестик для закрытия")]').click()
+            cross_button.click()
             search_is_finished = 0
             update_details(
                 details['current_delivery_date_cell'],
@@ -443,8 +445,7 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
             current_delivery_date,
         )
         if first_border is None:
-            driver.find_element_by_xpath('//button[contains(@aria-label, '
-                                         '"Крестик для закрытия")]').click()
+            cross_button.click()
             search_is_finished = 0
             update_details(
                 details['current_delivery_date_cell'],
@@ -473,76 +474,87 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
             )
         for slot in slots_table:
             if slot.get_attribute('innerHTML').find(
-                    'table_emptyCell_dxX7v') == -1:
-                slot.click()
-            else:
+                    'time-slots-table_emptyCell_dxX7v') != -1:
                 continue
+            else:
+                slot.click()
             if slot.get_attribute('innerHTML').find(
-                    'time-slots-table_selectedSlot_3H6l9') != -1:
-                chosen_date_time = driver.find_element_by_xpath(
-                    '//span[contains(@class, "time-slot-select-dialog_'
-                    'selectedTimeslotDateLabel_3QFJq")]'
-                ).find_element_by_xpath('../.').text
-                chosen_date, chosen_time = chosen_date_time.split(
-                    sep='Время: ')
-                _, cleared_date = chosen_date.split(sep=', ')
-                formatted_chosen_date, _ = convert_date_range(
-                    f'{cleared_date} — {cleared_date}')
-                if desired_date < current_delivery_date < \
-                        formatted_chosen_date:
-                    slot.click()
-                    delay()
-                    driver.find_element_by_xpath(
-                        '//button[contains(@aria-label, '
-                        '"Крестик для закрытия")]').click()
-                    search_is_finished = 0
-                    update_details(
-                        details['current_delivery_date_cell'],
-                        current_delivery_date_string,
-                        )
-                    update_details(
-                        details['processed_cell'],
-                        search_is_finished,
-                        )
-                    logger.info('Не обнаружено подходящих слотов.')
-                    break
-                elif formatted_chosen_date < desired_date:
-                    slot.click()
-                    delay()
-                    continue
-                elif driver.find_element_by_xpath(
-                        '//span[contains(@class, "time-slot-select-dialog_subm'
-                        'itButton_b2nbQ")]').get_attribute('outerHTML').find(
-                        'disabled="disabled"') != -1:
-                    driver.find_element_by_xpath(
-                        '//button[contains(@aria-label, '
-                        '"Крестик для закрытия")]').click()
-                else:
-                    driver.find_element_by_class_name(
-                        'custom-button_text_2H7oV').click()
+                    'time-slots-table_selectedSlot_3H6l9') == -1:
+                continue
+            chosen_date_time = driver.find_element_by_xpath(
+                '//span[contains(@class, "time-slot-select-dialog_'
+                'selectedTimeslotDateLabel_3QFJq")]'
+            ).find_element_by_xpath('../.').text
+            chosen_date, chosen_time = chosen_date_time.split(
+                sep='Время: ')
+            _, cleared_date = chosen_date.split(sep=', ')
+            formatted_chosen_date, _ = convert_date_range(
+                f'{cleared_date} — {cleared_date}')
+            if desired_date < current_delivery_date < \
+                    formatted_chosen_date:
+                slot.click()
                 delay()
-                new_delivery_date_string = driver.find_element_by_xpath(
-                    '//span[contains(@class, '
-                    '"orders-table-body-module_dateCell_tKzib")]').text
-                new_delivery_date = datetime.strptime(
-                    new_delivery_date_string,
-                    '%d.%m.%Y').date()
-                search_is_finished = int(new_delivery_date == desired_date)
+                cross_button.click()
+                search_is_finished = 0
                 update_details(
                     details['current_delivery_date_cell'],
-                    new_delivery_date_string,
+                    current_delivery_date_string,
                     )
                 update_details(
                     details['processed_cell'],
                     search_is_finished,
                     )
-                logger.info(f'''
-                    \rДата поставки №{delivery_id} обновлена.
-                    \rНовая дата поставки: {new_delivery_date_string}.
-                    ''')
+                logger.info('Не обнаружено подходящих слотов.')
                 break
-            driver.refresh()
+            elif formatted_chosen_date < desired_date:
+                slot.click()
+                delay()
+                continue
+            elif driver.find_element_by_xpath(
+                    '//span[contains(@class, "time-slot-select-dialog_submitB'
+                    'utton_b2nbQ")]').get_attribute('innerHTML').find(
+                    'disabled="disabled"') != -1:
+                cross_button.click()
+                search_is_finished = 0
+                update_details(
+                    details['current_delivery_date_cell'],
+                    current_delivery_date_string,
+                )
+                update_details(
+                    details['processed_cell'],
+                    search_is_finished,
+                )
+                logger.info('Не обнаружено подходящих слотов.')
+                break
+            else:
+                driver.find_element_by_class_name(
+                    'custom-button_text_2H7oV').click()
             delay()
+            new_delivery_date_string = driver.find_element_by_xpath(
+                '//span[contains(@class, '
+                '"orders-table-body-module_dateCell_tKzib")]').text
+            new_delivery_date = datetime.strptime(
+                new_delivery_date_string,
+                '%d.%m.%Y').date()
+            search_is_finished = int(new_delivery_date == desired_date)
+            update_details(
+                details['current_delivery_date_cell'],
+                new_delivery_date_string,
+                )
+            update_details(
+                details['processed_cell'],
+                search_is_finished,
+                )
+            logger.info(f'''
+                \rДата поставки №{delivery_id} обновлена.
+                \rНовая дата поставки: {new_delivery_date_string}.
+                ''')
+            break
+        else:
+            if driver.page_source.find('Крестик для закрытия') != -1:
+                cross_button.click()
+        driver.refresh()
+        delay()
     return 'WAIT'
 
 
