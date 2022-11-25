@@ -222,18 +222,20 @@ def switch_account(driver, delay, account_name, ozon_delivery_page_url):
         '"index_companyItem_Pae1n index_hasSelect_s1JiM")]')
     if current_account_button.text == account_name:
         return'DELIVERY_MANAGEMENT'
-    else:
-        current_account_button.click()
-        delay()
-        driver.find_element_by_xpath(
-            f'//div[contains(text(), "{account_name}")]').click()
-        delay()
-        if driver.title == 'Just a moment...' \
-                or driver.page_source.find(
-                'Произошла ошибка на сервере') != -1:
-            return 'BLOCKING_WORKED'
-        if driver.current_url == ozon_delivery_page_url:
-            return 'DELIVERY_MANAGEMENT'
+    current_account_button.click()
+    if driver.page_source.find(account_name) != -1:
+        logger.info('Бренд найден в личном кабинете.')
+    sleep(5)
+    delay()
+    driver.find_element_by_xpath(
+        f'//div[contains(text(), "{account_name}")]').click()
+    delay()
+    if driver.title == 'Just a moment...' \
+            or driver.page_source.find(
+            'Произошла ошибка на сервере') != -1:
+        return 'BLOCKING_WORKED'
+    if driver.current_url == ozon_delivery_page_url:
+        return 'DELIVERY_MANAGEMENT'
 
 
 def change_date_range(driver, delay, desired_date, seen_ranges):
