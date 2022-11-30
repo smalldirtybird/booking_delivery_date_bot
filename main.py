@@ -167,6 +167,7 @@ def start_authenticate(driver, delay):
 def authenticate_with_email(driver, delay, ozon_login_email, yandex_email,
                             yandex_password, ozon_delivery_page_url):
     logger.info(f'Начало авторизации через почтовый ящик: {ozon_login_email}')
+    sleep(10)
     driver.find_element_by_xpath(
         '//a[contains(text(), "Войти по почте")]').click()
     delay()
@@ -223,9 +224,7 @@ def switch_account(driver, delay, account_name, ozon_delivery_page_url):
     if current_account_button.text == account_name:
         return'DELIVERY_MANAGEMENT'
     current_account_button.click()
-    if driver.page_source.find(account_name) != -1:
-        logger.info('Бренд найден в личном кабинете.')
-    sleep(5)
+    sleep(20)
     delay()
     driver.find_element_by_xpath(
         f'//div[contains(text(), "{account_name}")]').click()
