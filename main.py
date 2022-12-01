@@ -218,6 +218,8 @@ def select_account(driver, delay, account_name, ozon_delivery_page_url):
 
 def switch_account(driver, delay, account_name, ozon_delivery_page_url):
     logger.info(f'Переключение на аккаунт {account_name}')
+    driver.refresh()
+    sleep(10)
     current_account_button = driver.find_element_by_xpath(
         '//span[contains(@class, '
         '"index_companyItem_Pae1n index_hasSelect_s1JiM")]')
