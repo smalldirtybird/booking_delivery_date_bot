@@ -167,12 +167,9 @@ def start_authenticate(driver, delay):
 def authenticate_with_email(driver, delay, ozon_login_email, yandex_email,
                             yandex_password, ozon_delivery_page_url):
     logger.info(f'Начало авторизации через почтовый ящик: {ozon_login_email}')
-    enter_with_email_button = WebDriverWait(driver, 20).until(
-        expected_conditions.element_to_be_clickable((
-            By.XPATH,
-            '//a[contains(text(), "Войти по почте")]',
-        )))
-    enter_with_email_button.click()
+    sleep(10)
+    driver.find_element_by_xpath(
+        '//a[contains(text(), "Войти по почте")]').click()
     delay()
     email_field = driver.find_element_by_xpath(
         '//input[contains(@inputmode, "email")]')
@@ -182,6 +179,7 @@ def authenticate_with_email(driver, delay, ozon_login_email, yandex_email,
     delay()
     driver.find_element_by_xpath(
         '//span[contains(text(), "Получить код")]').click()
+    sleep(15)
     delay()
     verification_code = get_verification_code(yandex_email, yandex_password)
     driver.find_element_by_xpath(
@@ -220,21 +218,16 @@ def select_account(driver, delay, account_name, ozon_delivery_page_url):
 
 def switch_account(driver, delay, account_name, ozon_delivery_page_url):
     logger.info(f'Переключение на аккаунт {account_name}')
-    current_account_button = WebDriverWait(driver, 20).until(
-        expected_conditions.element_to_be_clickable((
-            By.XPATH,
-            '//span[contains(@class, '
-            '"index_companyItem_Pae1n index_hasSelect_s1JiM")]',
-        )))
+    current_account_button = driver.find_element_by_xpath(
+        '//span[contains(@class, '
+        '"index_companyItem_Pae1n index_hasSelect_s1JiM")]')
     if current_account_button.text == account_name:
         return'DELIVERY_MANAGEMENT'
     current_account_button.click()
-    activate_account_button = WebDriverWait(driver, 20).until(
-        expected_conditions.element_to_be_clickable((
-            By.XPATH,
-            f'//div[contains(text(), "{account_name}")]',
-        )))
-    activate_account_button.click()
+    sleep(20)
+    delay()
+    driver.find_element_by_xpath(
+        f'//div[contains(text(), "{account_name}")]').click()
     delay()
     if driver.title == 'Just a moment...' \
             or driver.page_source.find(
