@@ -123,7 +123,7 @@ def prepare_webdriver(profile_path):
     profile.update_preferences()
     desired = DesiredCapabilities.FIREFOX
     options = Options()
-    options.add_argument('--headless')
+    # options.add_argument('--headless')
     driver = webdriver.Firefox(
         firefox_binary='/usr/bin/firefox',
         firefox_profile=profile,
@@ -167,6 +167,7 @@ def start_authenticate(driver, delay):
 def authenticate_with_email(driver, delay, ozon_login_email, yandex_email,
                             yandex_password, ozon_delivery_page_url):
     logger.info(f'Начало авторизации через почтовый ящик: {ozon_login_email}')
+    sleep(5)
     driver.find_element_by_xpath(
         '//a[contains(text(), "Войти по почте")]').click()
     delay()

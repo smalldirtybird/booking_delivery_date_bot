@@ -159,3 +159,4 @@ token.pickle
 spreadsheet_credentials.json
 nohup.out
 browser_profile/
+run_browser.sh
