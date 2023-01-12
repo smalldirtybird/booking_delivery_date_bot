@@ -1,13 +1,13 @@
 import logging
 import os
+import platform
+import shutil
 import subprocess
 from datetime import datetime, timedelta
 from functools import partial
-from random import randrange
 from time import sleep
 
 import geckodriver_autoinstaller
-from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -18,7 +18,9 @@ from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 from telegram import Bot
 
-from clear_temp_folder import clear_temp_folder
+from bot_functions import (TelegramLogsHandler, convert_date_range,
+                           human_action_delay, limit_hour_rows,
+                           rotate_slots_table)
 from spreadsheets_api import (get_delivery_date_requirements,
                               get_storage_settings, update_spreadsheet)
 from yandex_mail import get_verification_code
@@ -29,92 +31,6 @@ web_driver = None
 start_time = None
 
 
-class TelegramLogsHandler(logging.Handler):
-
-    def __init__(self, tg_bot, chat_id):
-        super().__init__()
-        self.chat_id = chat_id
-        self.tg_bot = tg_bot
-
-    def emit(self, record):
-        log_entry = self.format(record)
-        self.tg_bot.send_message(chat_id=self.chat_id, text=log_entry)
-
-
-def human_action_delay(floor, ceil):
-    delay_time = randrange(int(floor) * 1000, int(ceil) * 1000) / 1000
-    sleep(delay_time)
-
-
-def convert_date_range(date_range_string):
-    current_year = datetime.now().year
-    months_by_numbers = {
-        'января': 1,
-        'февраля': 2,
-        'марта': 3,
-        'апреля': 4,
-        'мая': 5,
-        'июня': 6,
-        'июля': 7,
-        'августа': 8,
-        'сентября': 9,
-        'октября': 10,
-        'ноября': 11,
-        'декабря': 12
-    }
-    dates = date_range_string.split(sep=' — ')
-    date_range = []
-    for date in dates:
-        day, month = date.split(sep=' ')
-        date_string = '.'.join(
-            (
-                day,
-                str(months_by_numbers[month]),
-                str(current_year),
-            )
-        )
-        date_range.append(datetime.strptime(date_string, '%d.%m.%Y').date())
-    if len(date_range) > 1 and date_range[0] > date_range[1]:
-        date_range[1] += relativedelta(years=+1)
-    if len(date_range) == 1:
-        return tuple(date_range * 2)
-    return tuple(date_range)
-
-
-def rotate_slots_table(slots, columns_quantity, first_column, last_column):
-    slots_rotated = []
-    column = 1
-    row = 0
-    for slot in slots:
-        slots_rotated.insert(row * column, slot)
-        row += 1
-        if row == columns_quantity:
-            row = 0
-            column += 1
-    slots_in_column = len(slots_rotated) / columns_quantity
-    lower_border = 0
-    upper_border = len(slots_rotated)
-    if first_column:
-        lower_border = int(first_column * slots_in_column)
-    if last_column:
-        upper_border = int((last_column + 1) * slots_in_column)
-    return slots_rotated[lower_border:upper_border]
-
-
-def limit_hour_rows(slots_table, upper_timeslot, lower_timeslot):
-    column_starts = 0
-    column_ends = 23
-    current_row = column_ends
-    limited_slots_table = []
-    for slot in slots_table:
-        if upper_timeslot <= current_row <= lower_timeslot:
-            limited_slots_table.append(slot)
-        current_row -= 1
-        if current_row == column_starts - 1:
-            current_row = column_ends
-    return limited_slots_table
-
-
 def prepare_webdriver(profile_path):
     geckodriver_autoinstaller.install()
     profile = webdriver.FirefoxProfile(profile_path)
@@ -123,7 +39,7 @@ def prepare_webdriver(profile_path):
     profile.update_preferences()
     desired = DesiredCapabilities.FIREFOX
     options = Options()
-    options.add_argument('--headless')
+    # options.add_argument('--headless')
     driver = webdriver.Firefox(
         firefox_binary='/usr/bin/firefox',
         firefox_profile=profile,
@@ -133,21 +49,37 @@ def prepare_webdriver(profile_path):
     return driver
 
 
-def start(driver, delay, ozon_delivery_page_url, profile_path):
-    global web_driver
+def handle_blocking(driver, delay):
+    logger.info('Получена CAPTCHA, бот будет перезапущен.')
+    delay()
+    driver.close()
+    return 'START'
+
+
+def start(driver, delay, ozon_delivery_page_url):
     global start_time
     logger.info('Бот запущен.')
     start_time = datetime.now()
-    clear_temp_folder()
-    subprocess.call('./run_browser.sh', shell=True)
-    web_driver = prepare_webdriver(profile_path)
-    web_driver.get(ozon_delivery_page_url)
+    pathname_templates = ['rust_mozprofile', 'tmp']
+    if platform.system() == 'Linux':
+        tempfolder = '/tmp'
+    else:
+        return
+    tempfolder_content = os.listdir(tempfolder)
+    for element in tempfolder_content:
+        element_path = os.path.join(tempfolder, element)
+        for template in pathname_templates:
+            if os.path.isdir(element_path) and template in element \
+                    and 'snap-private-tmp' not in element \
+                    and 'systemd-private' not in element:
+                shutil.rmtree(element_path)
+    driver.get(ozon_delivery_page_url)
     delay()
-    if web_driver.title == 'Just a moment...'\
-            or web_driver.page_source.find(
+    if driver.title == 'Just a moment...'\
+            or driver.page_source.find(
             'Произошла ошибка на сервере') != -1:
         return 'BLOCKING_WORKED'
-    if web_driver.current_url == ozon_delivery_page_url:
+    if driver.current_url == ozon_delivery_page_url:
         return 'SWITCH_ACCOUNT'
     else:
         return 'NEED_AUTHENTICATE'
@@ -156,6 +88,8 @@ def start(driver, delay, ozon_delivery_page_url, profile_path):
 def start_authenticate(driver, delay):
     driver.find_element_by_xpath('//span[contains(text(), "Войти")]').click()
     logger.info('Требуется авторизация.')
+    if driver.page_source.find('Войти по почте') == -1:
+        driver.refresh()
     delay()
     if driver.title == 'Just a moment...' \
             or driver.page_source.find('Произошла ошибка на сервере') != -1:
@@ -165,9 +99,10 @@ def start_authenticate(driver, delay):
 
 
 def authenticate_with_email(driver, delay, ozon_login_email, yandex_email,
-                            yandex_password, ozon_delivery_page_url):
+                            yandex_password, ozon_delivery_page_url,
+                            signin_url):
     logger.info(f'Начало авторизации через почтовый ящик: {ozon_login_email}')
-    sleep(5)
+    sleep(1000)
     driver.find_element_by_xpath(
         '//a[contains(text(), "Войти по почте")]').click()
     delay()
@@ -189,13 +124,8 @@ def authenticate_with_email(driver, delay, ozon_login_email, yandex_email,
     if driver.title == 'Just a moment...' \
             or driver.page_source.find('Произошла ошибка на сервере') != -1:
         return 'BLOCKING_WORKED'
-    if driver.current_url == 'https://seller.ozon.ru/app/registration/signin':
+    if driver.current_url == signin_url:
         return 'ACCOUNT_SELECTION'
-    else:
-        driver.get(ozon_delivery_page_url)
-    if driver.title == 'Just a moment...' \
-            or driver.page_source.find('Произошла ошибка на сервере') != -1:
-        return 'BLOCKING_WORKED'
     if driver.current_url == ozon_delivery_page_url:
         return 'SWITCH_ACCOUNT'
 
@@ -218,8 +148,7 @@ def select_account(driver, delay, account_name, ozon_delivery_page_url):
 
 def switch_account(driver, delay, account_name, ozon_delivery_page_url):
     logger.info(f'Переключение на аккаунт {account_name}')
-    driver.refresh()
-    sleep(10)
+    delay()
     current_account_button = driver.find_element_by_xpath(
         '//span[contains(@class, '
         '"index_companyItem_Pae1n index_hasSelect_s1JiM")]')
@@ -244,12 +173,14 @@ def change_date_range(driver, delay, desired_date, seen_ranges):
     range_switcher_components = range_switcher.find_elements_by_tag_name('div')
     if len(range_switcher_components) == 1:
         return
-    left_switcher, current_date_range_string,\
+    left_switcher, current_date_range_string, \
         right_switcher = range_switcher_components
     left_switcher_html = left_switcher.get_attribute('innerHTML')
     right_switcher_html = right_switcher.get_attribute('innerHTML')
     current_date_range = convert_date_range(current_date_range_string.text)
     seen_ranges.append(current_date_range)
+    if min(current_date_range) >= desired_date <= max(current_date_range):
+        return
     if desired_date < min(current_date_range) \
             and left_switcher_html.find('disabled="disabled"') == -1:
         left_switcher.click()
@@ -259,8 +190,8 @@ def change_date_range(driver, delay, desired_date, seen_ranges):
         right_switcher.click()
         delay()
     if convert_date_range(driver.find_element_by_xpath(
-        '//div[contains(@class, '
-        '"slots-range-switcher_dateSwitcherInterval_220Nq")]').text) \
+            '//div[contains(@class, '
+            '"slots-range-switcher_dateSwitcherInterval_220Nq")]').text) \
             not in seen_ranges:
         change_date_range(driver, delay, desired_date, seen_ranges)
     else:
@@ -277,21 +208,21 @@ def get_slot_search_window(driver, delay, desired_date, current_delivery_date):
         '//div[contains(@class, '
         '"time-slots-table_slotsTableHead_ERvbR")]'
     ).find_elements_by_class_name(
-            'time-slots-table_cellHeadDate_2VUyD')
-    available_days = []
-    for day in table_header:
-        available_days.append(day.text)
+        'time-slots-table_cellHeadDate_2VUyD')
+    available_days = [day.text for day in table_header]
     previous_date, last_date = available_date_range
     date_list = []
     for day in available_days:
         date = previous_date.replace(day=int(day))
         if date_list and date < date_list[available_days.index(day) - 1]:
-            date = date.replace(month=(date.month + 1))
+            month = date.month if date.month < 12 else date.month - 12
+            date = date.replace(month=(month + 1))
         date_list.append(date)
     logger.info(f'Доступные даты поставки: {date_list}')
     suitable_dates = []
     for date in date_list:
-        if date == desired_date or current_delivery_date < desired_date < date\
+        if date == desired_date \
+                or current_delivery_date < desired_date < date \
                 or current_delivery_date > desired_date and \
                 desired_date < date < current_delivery_date:
             suitable_dates.append(date)
@@ -304,10 +235,25 @@ def get_slot_search_window(driver, delay, desired_date, current_delivery_date):
     return first_available_date_index, last_available_date_index
 
 
+def wait(driver, delay, sleep_time):
+    global start_time
+    driver.close()
+    wakeup_time = start_time + timedelta(minutes=int(sleep_time))
+    left_time_to_sleep = wakeup_time - datetime.now()
+    logger.info(f'Следующий запуск в {wakeup_time}.')
+    if left_time_to_sleep > timedelta(seconds=0):
+        sleep(left_time_to_sleep.seconds)
+    return 'START'
+
+
 def choose_delivery_date(driver, delay, google_credentials, table_name,
                          requirements_sheet_name, account_name,
-                         storage_sheet_name):
-    logger.info(f'Старт обработки таблицы {table_name}.')
+                         storage_sheet_name, start_page):
+    if driver.page_source.find(
+            'Произошла ошибка на сервере') != -1:
+        driver.refresh()
+
+    # Загрузка данных для поиска поставок из таблицы
     delivery_date_requirements = get_delivery_date_requirements(
         google_credentials,
         table_name,
@@ -321,12 +267,24 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
     )
     if type(delivery_date_requirements) is tuple:
         delivery_date_requirements = delivery_date_requirements[0]
+
+    # Проверка наличия и закрытие объявления
+    if driver.page_source.find(
+            'popup-footer-module_footer_QFh20 popup_footer_o5aCa') != -1:
+        driver.find_element_by_xpath(
+            '//span[contains(text(), "Напомнить позже")]').click()
+    logger.info(f'Старт обработки таблицы {table_name}.')
+
+    # Обработка поставок в цикле
     for delivery_id, details in delivery_date_requirements.items():
+        driver.get(start_page)
+        delay()
+        if driver.title == 'Just a moment...' or driver.page_source.find(
+                'Произошла ошибка на сервере') != -1:
+            return 'BLOCKING_WORKED'
         logger.info(f'Обработка поставки {delivery_id}.')
-        if driver.page_source.find(
-                'popup-footer-module_footer_QFh20 popup_footer_o5aCa') != -1:
-            driver.find_element_by_xpath(
-               '//span[contains(text(), "Напомнить позже")]').click()
+
+        # Поиск поставки в списке
         search_field_button = WebDriverWait(driver, 20).until(
             expected_conditions.element_to_be_clickable((
                 By.XPATH,
@@ -342,10 +300,6 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
         delay()
         search_field_button.click()
         delay()
-        if driver.title == 'Just a moment...' \
-                or driver.page_source.find(
-                'Произошла ошибка на сервере') != -1:
-            return 'BLOCKING_WORKED'
         if driver.find_element_by_xpath(
             '//div[contains(@class, "container-fluid")]').get_attribute(
             'innerHTML').find(
@@ -358,48 +312,48 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
             delay()
             continue
         logger.info(f'Поставка {delivery_id} найдена.')
-        current_data_button_class = 'orders-table-body-module_dateCell_tKzib'
-        table_row = driver.find_element_by_xpath(
-            '//tbody')
-        table_row_html = table_row.get_attribute('innerHTML')
+
+        # Определение режима поставок на склад
         storage_name = driver.find_element_by_xpath(
             '//div[contains(@class, '
             '"orders-table-body-module_supplyWarehouseCell_3VyP7")]'
         ).text
+        storage_is_special = bool(storage_name in storage_settings.keys())
+
+        # Определение текущего таймслота поставки
         current_delivery_timeslot = driver.find_element_by_xpath(
             '//div[contains(@class, '
             '"orders-table-body-module_cellAdditionalText_3McBH '
             'orders-table-body-module_tdAdditionalText_1IduN")]'
-        ).text
-        timeslot_start_hour, *_ = current_delivery_timeslot.split(sep=':')
-        storage_is_special = bool(storage_name in storage_settings.keys())
-        if table_row_html.find(current_data_button_class) == -1:
-            current_delivery_date = datetime.now().date() + timedelta(weeks=10)
-            current_delivery_date_string = current_delivery_date.strftime(
-                '%d.%m.%Y')
-            current_delivery_date_button = driver.find_element_by_xpath(
-                '//button[contains(text(), "Выбрать")]')
-        else:
-            current_delivery_date_button = driver.find_element_by_xpath(
-                f'//span[contains(@class, "{current_data_button_class}")]')
-            current_delivery_date_string = current_delivery_date_button.text
-            current_delivery_date = datetime.strptime(
-                current_delivery_date_string,
-                '%d.%m.%Y',
-            ).date()
-        desired_date = details['min_date']
+        )
+        current_delivery_date_string = \
+            current_delivery_timeslot.find_element_by_xpath('..').text[0:10]
+        current_delivery_date = datetime.strptime(
+            current_delivery_date_string,
+            '%d.%m.%Y',
+        ).date()
+        timeslot_start_hour, *_ = current_delivery_timeslot.text.split(sep=':')
+
+        # Подготовка коллбэка на обновление таблицы
         update_details = partial(
             update_spreadsheet,
             google_credentials=google_credentials,
             table_name=table_name,
             requirements_sheet_name=requirements_sheet_name,
         )
+
+        # Извлечение условий поставки из таблицы
         if storage_is_special:
             upper_timeslot = storage_settings[storage_name]['upper_timeslot']
             lower_timeslot = storage_settings[storage_name]['lower_timeslot']
-        if current_delivery_date == desired_date and (
-                not storage_is_special or storage_is_special and
-                upper_timeslot <= timeslot_start_hour <= lower_timeslot):
+        else:
+            upper_timeslot = 0
+            lower_timeslot = 23
+        desired_date = details['min_date']
+
+        # Переход дальше по циклу, если таймслот уже установлен
+        if current_delivery_date == desired_date and int(upper_timeslot) <= \
+                int(timeslot_start_hour) <= int(lower_timeslot):
             search_is_finished = 1
             update_details(
                 details['current_delivery_date_cell'],
@@ -414,16 +368,39 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
                 \r{current_delivery_date}.
                 ''')
             continue
-        current_delivery_date_button.click()
+
+        # Переход на страницу выбора таймслота, если таймслот не подходит
+        driver.find_element_by_xpath(
+            '//div[contains(@class, '
+            '"orders-table-body-module_parentOrderNumber_3mIBW")]').click()
+        if driver.title == 'Just a moment...' or driver.page_source.find(
+                'Произошла ошибка на сервере') != -1:
+            return 'BLOCKING_WORKED'
+        delay()
+
+        # Обработка всплывающего окна
+        if driver.page_source.find('Заявка попадёт в архив') != -1:
+            driver.find_element_by_xpath(
+                '//span[contains(text(), "Оставить активной")]').click()
+
+        # Открытие сайд-панели с таймслотами
+        driver.find_element_by_xpath(
+                '//div[contains(@class, "warehouse-info_timeslot_1HCVC")]'
+        ).click()
         timeslot_sidepage = driver.find_element_by_xpath(
             '//div[contains(@class, '
             '"side-page-content-module_sidePageContent_3QWFS typography-module'
             '_body-500_y4OT3 time-slot-select-dialog_dialog_2bhKD")]')
         cross_button = driver.find_element_by_xpath(
             '//button[contains(@aria-label, "Крестик для закрытия")]')
+        if driver.page_source.find(
+                'Произошла ошибка') != -1:
+            driver.refresh()
+
+        # Закрытие панели, если нет доступных таймслотов, обновление таблицы,
+        # переход дальше по циклу
         if timeslot_sidepage.get_attribute('innerHTML').find(
-                'Нет доступных дней и времени') == -1:
-            delay()
+                'Нет доступных дней и времени') != -1:
             cross_button.click()
             search_is_finished = 0
             update_details(
@@ -434,16 +411,23 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
                 details['processed_cell'],
                 search_is_finished,
             )
-            logger.info('Нет доступных дней и времени.')
+            logger.info('Нет доступных дней и времени или произошла ошибка.')
             continue
         delay()
+
+        # Выбор диапазона дат, подходящего под условия из таблицы
         change_date_range(driver, delay, desired_date, [])
+
+        # Поиск столбцов, подходящих для выбора таймслота
         first_border, last_border = get_slot_search_window(
             driver,
             delay,
             desired_date,
             current_delivery_date,
         )
+
+        # Переход дальше по циклу, если не найдено подходящих дат для поставки,
+        # обновление таблицы.
         if first_border is None:
             cross_button.click()
             search_is_finished = 0
@@ -457,6 +441,7 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
                 )
             logger.info('Не обнаружено подходящих слотов.')
             continue
+
         datetime_slots = driver.find_element_by_class_name(
             'time-slots-table_slotsTableContentContainer_1Z9BS')
         slots_table = rotate_slots_table(
@@ -530,16 +515,26 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
                 driver.find_element_by_class_name(
                     'custom-button_text_2H7oV').click()
             delay()
-            new_delivery_date_string = driver.find_element_by_xpath(
-                '//span[contains(@class, '
-                '"orders-table-body-module_dateCell_tKzib")]').text
-            new_delivery_date = datetime.strptime(
-                new_delivery_date_string,
-                '%d.%m.%Y').date()
-            search_is_finished = int(new_delivery_date == desired_date)
+            new_delivery_date_string_raw = driver.find_element_by_xpath(
+                '//div[contains(@class, "warehouse-info_timeslot_1HCVC")]')
+            new_delivery_date_string = ' — '.join((
+                new_delivery_date_string_raw.text,
+                new_delivery_date_string_raw.text
+            ))
+            new_delivery_date = convert_date_range(new_delivery_date_string)[0]
+            new_timeslot_start_hour_string = driver.find_element_by_xpath(
+                '//div[contains(@class, "warehouse-info_date_357nW")]').text
+            new_timeslot_start = new_timeslot_start_hour_string.replace(
+                new_delivery_date_string_raw.text + '\n', '')[:2]
+
+            search_is_finished = (int(
+                new_delivery_date == desired_date
+                and int(upper_timeslot) <= int(
+                    new_timeslot_start) <= int(lower_timeslot)))
+
             update_details(
                 details['current_delivery_date_cell'],
-                new_delivery_date_string,
+                new_delivery_date.strftime('%d.%m.%Y'),
                 )
             update_details(
                 details['processed_cell'],
@@ -547,7 +542,8 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
                 )
             logger.info(f'''
                 \rДата поставки №{delivery_id} обновлена.
-                \rНовая дата поставки: {new_delivery_date_string}.
+                \rНовая дата поставки:
+                {new_delivery_date.strftime('%d.%m.%Y')}.
                 ''')
             break
         else:
@@ -558,38 +554,16 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
     return 'WAIT'
 
 
-def wait(driver, delay, sleep_time):
-    global start_time
-    driver.close()
-    wakeup_time = start_time + timedelta(minutes=int(sleep_time))
-    left_time_to_sleep = wakeup_time - datetime.now()
-    logger.info(f'Следующий запуск в {wakeup_time}.')
-    if left_time_to_sleep > timedelta(seconds=0):
-        sleep(left_time_to_sleep.seconds)
-    return 'START'
-
-
-def handle_blocking(driver, delay):
-    logger.info('Получена CAPTCHA, бот будет перезапущен.')
-    delay()
-    os.system('pkill firefox')
-    return 'START'
-
-
 def handle_statement(profile_path, ozon_delivery_page_url, delay,
-                     ozon_login_email, yandex_email, yandex_password,
-                     account_name, sleep_time,
+                     ozon_login_email, signin_url, yandex_email,
+                     yandex_password, account_name, sleep_time,
                      google_spreadsheet_credentials, table_name,
                      requirements_sheet_name, storage_sheet_name):
     global STATE
     global web_driver
     global start_time
     states = {
-        'START': partial(
-            start,
-            ozon_delivery_page_url=ozon_delivery_page_url,
-            profile_path=profile_path,
-        ),
+        'START': partial(start, ozon_delivery_page_url=ozon_delivery_page_url),
         'NEED_AUTHENTICATE': start_authenticate,
         'AUTHENTICATION_PROCESS': partial(
             authenticate_with_email,
@@ -597,6 +571,7 @@ def handle_statement(profile_path, ozon_delivery_page_url, delay,
             yandex_email=yandex_email,
             yandex_password=yandex_password,
             ozon_delivery_page_url=ozon_delivery_page_url,
+            signin_url=signin_url,
         ),
         'ACCOUNT_SELECTION': partial(
             select_account,
@@ -615,6 +590,7 @@ def handle_statement(profile_path, ozon_delivery_page_url, delay,
             requirements_sheet_name=requirements_sheet_name,
             account_name=account_name,
             storage_sheet_name=storage_sheet_name,
+            start_page=ozon_delivery_page_url,
         ),
         'WAIT': partial(wait, sleep_time=sleep_time),
         'BLOCKING_WORKED': handle_blocking,
@@ -632,19 +608,34 @@ def main():
         ozon_login_email = os.environ['OZON_LOGIN_EMAIL']
         delay_floor = os.environ['ACTION_DELAY_FLOOR']
         delay_ceil = os.environ['ACTION_DELAY_CEIL']
-        ozon_url = 'https://seller.ozon.ru/app/supply/' \
-                   'orders?filter=SupplyPreparation'
+        ozon_url = os.environ['START_URL']
+        browser_profile_path = os.environ['FIREFOX_PROFILE_PATH']
         delay = partial(
                     human_action_delay,
                     floor=delay_floor,
                     ceil=delay_ceil,
                 )
+        clean_browser_profile = os.environ['CLEAN_BROWSER_PROFILE_PATH']
+        subprocess.run(
+            f'pkill firefox; rm -rf {browser_profile_path}*;'
+            f'cp -r {clean_browser_profile}* {browser_profile_path}',
+            shell=True,
+            stdout=subprocess.PIPE,
+        )
+        subprocess.run(
+            f'./run_browser.sh "{ozon_url}" {browser_profile_path}',
+            shell=True,
+            stdout=subprocess.PIPE,
+        )
+        global web_driver
+        web_driver = prepare_webdriver(browser_profile_path)
         while True:
             handle_statement(
-                os.environ['FIREFOX_PROFILE_PATH'],
+                browser_profile_path,
                 ozon_url,
                 delay,
                 ozon_login_email,
+                os.environ['SIGNIN_URL'],
                 os.environ['YANDEX_EMAIL'],
                 os.environ['YANDEX_PASSWORD'],
                 os.environ['ACCOUNT_NAME'],
