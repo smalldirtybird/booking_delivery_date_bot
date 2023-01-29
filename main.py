@@ -24,8 +24,13 @@ from bot_functions import (TelegramLogsHandler, convert_date_range,
 from spreadsheets_api import (get_delivery_date_requirements,
                               get_storage_settings, update_spreadsheet)
 from yandex_mail import get_verification_code
+from element_search_params import Xpath, ClassName, FindInnerHtml
 
+load_dotenv()
 logger = logging.getLogger('TelegramLogger')
+xpath = Xpath(os.environ['ACCOUNT_NAME'])
+c_name = ClassName()
+in_html = FindInnerHtml()
 STATE = 'START'
 web_driver = None
 start_time = None
@@ -75,9 +80,7 @@ def start(driver, delay, ozon_delivery_page_url):
                 shutil.rmtree(element_path)
     driver.get(ozon_delivery_page_url)
     delay()
-    if driver.title == 'Just a moment...'\
-            or driver.page_source.find(
-            'Произошла ошибка на сервере') != -1:
+    if driver.title == 'Just a moment...':
         return 'BLOCKING_WORKED'
     if driver.current_url == ozon_delivery_page_url:
         return 'SWITCH_ACCOUNT'
@@ -86,43 +89,35 @@ def start(driver, delay, ozon_delivery_page_url):
 
 
 def start_authenticate(driver, delay):
-    driver.find_element_by_xpath('//span[contains(text(), "Войти")]').click()
-    logger.info('Требуется авторизация.')
-    if driver.page_source.find('Войти по почте') == -1:
-        driver.refresh()
+    driver.find_element_by_xpath(xpath.enter_button).click()
     delay()
-    if driver.title == 'Just a moment...' \
-            or driver.page_source.find('Произошла ошибка на сервере') != -1:
+    logger.info('Требуется авторизация.')
+    if driver.title == 'Just a moment...':
         return 'BLOCKING_WORKED'
-    else:
-        return 'AUTHENTICATION_PROCESS'
+    return 'AUTHENTICATION_PROCESS'
 
 
 def authenticate_with_email(driver, delay, ozon_login_email, yandex_email,
                             yandex_password, ozon_delivery_page_url,
                             signin_url):
     logger.info(f'Начало авторизации через почтовый ящик: {ozon_login_email}')
-    sleep(1000)
-    driver.find_element_by_xpath(
-        '//a[contains(text(), "Войти по почте")]').click()
+    enter_with_email_button = driver.find_element_by_xpath(
+        xpath.enter_with_email_button)
+    enter_with_email_button.click()
     delay()
-    email_field = driver.find_element_by_xpath(
-        '//input[contains(@inputmode, "email")]')
+    email_field = driver.find_element_by_xpath(xpath.email_input_field)
     for _ in ozon_login_email:
         email_field.send_keys(Keys.BACKSPACE)
     email_field.send_keys(ozon_login_email)
     delay()
-    driver.find_element_by_xpath(
-        '//span[contains(text(), "Получить код")]').click()
+    driver.find_element_by_xpath(xpath.get_verification_code_button).click()
     sleep(15)
     delay()
     verification_code = get_verification_code(yandex_email, yandex_password)
     driver.find_element_by_xpath(
-        '//input[contains(@inputmode, "numeric")]').send_keys(
-        verification_code)
+        xpath.verification_code_input_field).send_keys(verification_code)
     delay()
-    if driver.title == 'Just a moment...' \
-            or driver.page_source.find('Произошла ошибка на сервере') != -1:
+    if driver.title == 'Just a moment...':
         return 'BLOCKING_WORKED'
     if driver.current_url == signin_url:
         return 'ACCOUNT_SELECTION'
@@ -132,13 +127,11 @@ def authenticate_with_email(driver, delay, ozon_login_email, yandex_email,
 
 def select_account(driver, delay, account_name, ozon_delivery_page_url):
     logger.info(f'Переключение на аккаунт {account_name}')
-    driver.find_element_by_xpath(
-        f'//div[contains(text(), "{account_name}")]').click()
+    driver.find_element_by_xpath(xpath.account_name_button).click()
     delay()
-    driver.find_element_by_xpath('//span[contains(text(), "Далее")]').click()
+    driver.find_element_by_xpath(xpath.next_button).click()
     delay()
-    if driver.title == 'Just a moment...' \
-            or driver.page_source.find('Произошла ошибка на сервере') != -1:
+    if driver.title == 'Just a moment...':
         return 'BLOCKING_WORKED'
     if driver.current_url == 'https://seller.ozon.ru/app/dashboard/main':
         driver.get(ozon_delivery_page_url)
@@ -149,27 +142,26 @@ def select_account(driver, delay, account_name, ozon_delivery_page_url):
 def switch_account(driver, delay, account_name, ozon_delivery_page_url):
     logger.info(f'Переключение на аккаунт {account_name}')
     delay()
+    # Проверка наличия и закрытие объявления
+    if driver.page_source.find(in_html.delivery_search_page_pop_up) != -1:
+        driver.find_element_by_xpath(xpath.remind_later_button).click()
+    delay()
     current_account_button = driver.find_element_by_xpath(
-        '//span[contains(@class, '
-        '"index_companyItem_Pae1n index_hasSelect_s1JiM")]')
+        xpath.current_account_button)
     if current_account_button.text == account_name:
         return'DELIVERY_MANAGEMENT'
     current_account_button.click()
     delay()
-    driver.find_element_by_xpath(
-        f'//div[contains(text(), "{account_name}")]').click()
+    driver.find_element_by_xpath(xpath.account_name_button).click()
     delay()
-    if driver.title == 'Just a moment...' \
-            or driver.page_source.find(
-            'Произошла ошибка на сервере') != -1:
+    if driver.title == 'Just a moment...':
         return 'BLOCKING_WORKED'
     if driver.current_url == ozon_delivery_page_url:
         return 'DELIVERY_MANAGEMENT'
 
 
 def change_date_range(driver, delay, desired_date, seen_ranges):
-    range_switcher = driver.find_element_by_xpath(
-        '//div[contains(@class, "slots-range-switcher_dateSwitcher_34ExK")]')
+    range_switcher = driver.find_element_by_xpath(xpath.range_switcher)
     range_switcher_components = range_switcher.find_elements_by_tag_name('div')
     if len(range_switcher_components) == 1:
         return
@@ -190,9 +182,7 @@ def change_date_range(driver, delay, desired_date, seen_ranges):
         right_switcher.click()
         delay()
     if convert_date_range(driver.find_element_by_xpath(
-            '//div[contains(@class, '
-            '"slots-range-switcher_dateSwitcherInterval_220Nq")]').text) \
-            not in seen_ranges:
+            xpath.date_interval).text) not in seen_ranges:
         change_date_range(driver, delay, desired_date, seen_ranges)
     else:
         return
@@ -200,15 +190,9 @@ def change_date_range(driver, delay, desired_date, seen_ranges):
 
 def get_slot_search_window(driver, delay, desired_date, current_delivery_date):
     available_date_range = convert_date_range(
-        driver.find_element_by_xpath(
-            '//div[contains(@class, '
-            '"slots-range-switcher_dateSwitcherInterval_220Nq")]').text
-    )
+        driver.find_element_by_xpath(xpath.range_switcher).text)
     table_header = driver.find_element_by_xpath(
-        '//div[contains(@class, '
-        '"time-slots-table_slotsTableHead_ERvbR")]'
-    ).find_elements_by_class_name(
-        'time-slots-table_cellHeadDate_2VUyD')
+        xpath.table_header).find_elements_by_class_name(c_name.timeslot)
     available_days = [day.text for day in table_header]
     previous_date, last_date = available_date_range
     date_list = []
@@ -269,10 +253,8 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
         delivery_date_requirements = delivery_date_requirements[0]
 
     # Проверка наличия и закрытие объявления
-    if driver.page_source.find(
-            'popup-footer-module_footer_QFh20 popup_footer_o5aCa') != -1:
-        driver.find_element_by_xpath(
-            '//span[contains(text(), "Напомнить позже")]').click()
+    if driver.page_source.find(in_html.delivery_search_page_pop_up) != -1:
+        driver.find_element_by_xpath(xpath.remind_later_button).click()
     logger.info(f'Старт обработки таблицы {table_name}.')
 
     # Обработка поставок в цикле
@@ -286,24 +268,25 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
 
         # Поиск поставки в списке
         search_field_button = WebDriverWait(driver, 20).until(
-            expected_conditions.element_to_be_clickable((
-                By.XPATH,
-                '//div[contains(text(), "Номер")]',
-            )))
+            expected_conditions.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    xpath.search_field_button,
+                )
+            )
+        )
         search_field_button.click()
         delay()
         delivery_search_field = driver.find_element_by_xpath(
-            '//input[contains(@placeholder, "Поиск по номеру поставки")]')
+            xpath.delivery_search_field)
         for _ in delivery_id:
             delivery_search_field.send_keys(Keys.BACKSPACE)
         delivery_search_field.send_keys(delivery_id)
         delay()
         search_field_button.click()
         delay()
-        if driver.find_element_by_xpath(
-            '//div[contains(@class, "container-fluid")]').get_attribute(
-            'innerHTML').find(
-                    'Нет записей') != -1:
+        if driver.find_element_by_xpath(xpath.entries_panel).get_attribute(
+                'innerHTML').find('Нет записей') != -1:
             logger.info(f'''
                 \rПоставка № {delivery_id} не найдена в списках {account_name}.
                 \rПроверьте корректность информации в таблице {table_name}.
@@ -314,18 +297,12 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
         logger.info(f'Поставка {delivery_id} найдена.')
 
         # Определение режима поставок на склад
-        storage_name = driver.find_element_by_xpath(
-            '//div[contains(@class, '
-            '"orders-table-body-module_supplyWarehouseCell_3VyP7")]'
-        ).text
+        storage_name = driver.find_element_by_xpath(xpath.storage_name).text
         storage_is_special = bool(storage_name in storage_settings.keys())
 
         # Определение текущего таймслота поставки
         current_delivery_timeslot = driver.find_element_by_xpath(
-            '//div[contains(@class, '
-            '"orders-table-body-module_cellAdditionalText_3McBH '
-            'orders-table-body-module_tdAdditionalText_1IduN")]'
-        )
+            xpath.current_delivery_timeslot)
         current_delivery_date_string = \
             current_delivery_timeslot.find_element_by_xpath('..').text[0:10]
         current_delivery_date = datetime.strptime(
@@ -370,9 +347,7 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
             continue
 
         # Переход на страницу выбора таймслота, если таймслот не подходит
-        driver.find_element_by_xpath(
-            '//div[contains(@class, '
-            '"orders-table-body-module_parentOrderNumber_3mIBW")]').click()
+        driver.find_element_by_xpath(xpath.delivery_settings_page).click()
         if driver.title == 'Just a moment...' or driver.page_source.find(
                 'Произошла ошибка на сервере') != -1:
             return 'BLOCKING_WORKED'
@@ -385,14 +360,10 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
 
         # Открытие сайд-панели с таймслотами
         driver.find_element_by_xpath(
-                '//div[contains(@class, "warehouse-info_timeslot_1HCVC")]'
-        ).click()
+            xpath.new_delivery_date_string_raw).click()
         timeslot_sidepage = driver.find_element_by_xpath(
-            '//div[contains(@class, '
-            '"side-page-content-module_sidePageContent_3QWFS typography-module'
-            '_body-500_y4OT3 time-slot-select-dialog_dialog_2bhKD")]')
-        cross_button = driver.find_element_by_xpath(
-            '//button[contains(@aria-label, "Крестик для закрытия")]')
+            xpath.timeslot_sidepage)
+        cross_button = driver.find_element_by_xpath(xpath.cross_button)
         if driver.page_source.find(
                 'Произошла ошибка') != -1:
             driver.refresh()
@@ -443,10 +414,9 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
             continue
 
         datetime_slots = driver.find_element_by_class_name(
-            'time-slots-table_slotsTableContentContainer_1Z9BS')
+            c_name.datetime_slots)
         slots_table = rotate_slots_table(
-            datetime_slots.find_elements_by_class_name(
-                'time-slots-table_slotsTableCell_MTw9O'),
+            datetime_slots.find_elements_by_class_name(c_name.slots_table),
             7,
             first_border,
             last_border,
@@ -459,17 +429,15 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
             )
         for slot in slots_table:
             if slot.get_attribute('innerHTML').find(
-                    'time-slots-table_emptyCell_dxX7v') != -1:
+                    in_html.inactive_timeslot) != -1:
                 continue
             else:
                 slot.click()
             if slot.get_attribute('innerHTML').find(
-                    'time-slots-table_selectedSlot_3H6l9') == -1:
+                    in_html.selected_timeslot) == -1:
                 continue
             chosen_date_time = driver.find_element_by_xpath(
-                '//span[contains(@class, "time-slot-select-dialog_'
-                'selectedTimeslotDateLabel_3QFJq")]'
-            ).find_element_by_xpath('../.').text
+                xpath.chosen_date_time).find_element_by_xpath('../.').text
             chosen_date, chosen_time = chosen_date_time.split(
                 sep='Время: ')
             _, cleared_date = chosen_date.split(sep=', ')
@@ -496,9 +464,8 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
                 delay()
                 continue
             elif driver.find_element_by_xpath(
-                    '//span[contains(@class, "time-slot-select-dialog_submitB'
-                    'utton_b2nbQ")]').get_attribute('innerHTML').find(
-                    'disabled="disabled"') != -1:
+                    xpath.accept_timeslot_button).get_attribute(
+                'innerHTML').find('disabled="disabled"') != -1:
                 cross_button.click()
                 search_is_finished = 0
                 update_details(
@@ -512,18 +479,18 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
                 logger.info('Не обнаружено подходящих слотов.')
                 break
             else:
-                driver.find_element_by_class_name(
-                    'custom-button_text_2H7oV').click()
+                driver.find_element_by_xpath(
+                    xpath.accept_timeslot_button).click()
             delay()
             new_delivery_date_string_raw = driver.find_element_by_xpath(
-                '//div[contains(@class, "warehouse-info_timeslot_1HCVC")]')
+                xpath.new_delivery_date_string_raw)
             new_delivery_date_string = ' — '.join((
                 new_delivery_date_string_raw.text,
                 new_delivery_date_string_raw.text
             ))
             new_delivery_date = convert_date_range(new_delivery_date_string)[0]
             new_timeslot_start_hour_string = driver.find_element_by_xpath(
-                '//div[contains(@class, "warehouse-info_date_357nW")]').text
+                xpath.new_timeslot_start_hour_string).text
             new_timeslot_start = new_timeslot_start_hour_string.replace(
                 new_delivery_date_string_raw.text + '\n', '')[:2]
 
@@ -554,9 +521,9 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
     return 'WAIT'
 
 
-def handle_statement(profile_path, ozon_delivery_page_url, delay,
-                     ozon_login_email, signin_url, yandex_email,
-                     yandex_password, account_name, sleep_time,
+def handle_statement(profile_path, delay_floor, delay_ceil,
+                     ozon_delivery_page_url, ozon_login_email, signin_url,
+                     yandex_email, yandex_password, account_name, sleep_time,
                      google_spreadsheet_credentials, table_name,
                      requirements_sheet_name, storage_sheet_name):
     global STATE
@@ -595,26 +562,23 @@ def handle_statement(profile_path, ozon_delivery_page_url, delay,
         'WAIT': partial(wait, sleep_time=sleep_time),
         'BLOCKING_WORKED': handle_blocking,
     }
-    STATE = states[STATE](web_driver, delay)
+    STATE = states[STATE](web_driver, partial(
+            human_action_delay,
+            floor=delay_floor,
+            ceil=delay_ceil,
+            )
+        )
 
 
 def main():
     try:
-        load_dotenv()
         tg_bot = Bot(token=os.environ['TELEGRAM_BOT_TOKEN'])
         tg_chat_id = os.environ['TELEGRAM_CHAT_ID']
         logger.addHandler(TelegramLogsHandler(tg_bot, tg_chat_id))
         logger.setLevel(logging.INFO)
         ozon_login_email = os.environ['OZON_LOGIN_EMAIL']
-        delay_floor = os.environ['ACTION_DELAY_FLOOR']
-        delay_ceil = os.environ['ACTION_DELAY_CEIL']
         ozon_url = os.environ['START_URL']
         browser_profile_path = os.environ['FIREFOX_PROFILE_PATH']
-        delay = partial(
-                    human_action_delay,
-                    floor=delay_floor,
-                    ceil=delay_ceil,
-                )
         clean_browser_profile = os.environ['CLEAN_BROWSER_PROFILE_PATH']
         subprocess.run(
             f'pkill firefox; rm -rf {browser_profile_path}*;'
@@ -632,8 +596,9 @@ def main():
         while True:
             handle_statement(
                 browser_profile_path,
+                os.environ['ACTION_DELAY_FLOOR'],
+                os.environ['ACTION_DELAY_CEIL'],
                 ozon_url,
-                delay,
                 ozon_login_email,
                 os.environ['SIGNIN_URL'],
                 os.environ['YANDEX_EMAIL'],
