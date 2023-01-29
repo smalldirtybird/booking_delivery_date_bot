@@ -57,12 +57,13 @@ def prepare_webdriver(profile_path):
 def handle_blocking(driver, delay):
     logger.info('Получена CAPTCHA, бот будет перезапущен.')
     delay()
-    driver.close()
+    driver.quit()
     return 'START'
 
 
-def start(driver, delay, ozon_delivery_page_url):
+def start(driver, delay, browser_profile_path, ozon_delivery_page_url):
     global start_time
+    global web_driver
     logger.info('Бот запущен.')
     start_time = datetime.now()
     pathname_templates = ['rust_mozprofile', 'tmp']
@@ -78,11 +79,12 @@ def start(driver, delay, ozon_delivery_page_url):
                     and 'snap-private-tmp' not in element \
                     and 'systemd-private' not in element:
                 shutil.rmtree(element_path)
-    driver.get(ozon_delivery_page_url)
+    web_driver = prepare_webdriver(browser_profile_path)
+    web_driver.get(ozon_delivery_page_url)
     delay()
-    if driver.title == 'Just a moment...':
+    if web_driver.title == 'Just a moment...':
         return 'BLOCKING_WORKED'
-    if driver.current_url == ozon_delivery_page_url:
+    if web_driver.current_url == ozon_delivery_page_url:
         return 'SWITCH_ACCOUNT'
     else:
         return 'NEED_AUTHENTICATE'
@@ -221,7 +223,7 @@ def get_slot_search_window(driver, delay, desired_date, current_delivery_date):
 
 def wait(driver, delay, sleep_time):
     global start_time
-    driver.close()
+    driver.quit()
     wakeup_time = start_time + timedelta(minutes=int(sleep_time))
     left_time_to_sleep = wakeup_time - datetime.now()
     logger.info(f'Следующий запуск в {wakeup_time}.')
@@ -233,6 +235,7 @@ def wait(driver, delay, sleep_time):
 def choose_delivery_date(driver, delay, google_credentials, table_name,
                          requirements_sheet_name, account_name,
                          storage_sheet_name, start_page):
+    delay()
     if driver.page_source.find(
             'Произошла ошибка на сервере') != -1:
         driver.refresh()
@@ -530,7 +533,11 @@ def handle_statement(profile_path, delay_floor, delay_ceil,
     global web_driver
     global start_time
     states = {
-        'START': partial(start, ozon_delivery_page_url=ozon_delivery_page_url),
+        'START': partial(
+            start,
+            browser_profile_path=profile_path,
+            ozon_delivery_page_url=ozon_delivery_page_url,
+        ),
         'NEED_AUTHENTICATE': start_authenticate,
         'AUTHENTICATION_PROCESS': partial(
             authenticate_with_email,
@@ -592,7 +599,7 @@ def main():
             stdout=subprocess.PIPE,
         )
         global web_driver
-        web_driver = prepare_webdriver(browser_profile_path)
+        # web_driver = prepare_webdriver(browser_profile_path)
         while True:
             handle_statement(
                 browser_profile_path,
