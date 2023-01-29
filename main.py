@@ -61,7 +61,8 @@ def handle_blocking(driver, delay):
     return 'START'
 
 
-def start(driver, delay, browser_profile_path, ozon_delivery_page_url):
+def start(driver, delay, browser_profile_path, clean_browser_profile,
+          ozon_delivery_page_url):
     global start_time
     global web_driver
     logger.info('Бот запущен.')
@@ -79,6 +80,17 @@ def start(driver, delay, browser_profile_path, ozon_delivery_page_url):
                     and 'snap-private-tmp' not in element \
                     and 'systemd-private' not in element:
                 shutil.rmtree(element_path)
+    subprocess.run(
+        f'pkill firefox; rm -rf {browser_profile_path}*;'
+        f'cp -r {clean_browser_profile}* {browser_profile_path}',
+        shell=True,
+        stdout=subprocess.PIPE,
+    )
+    subprocess.run(
+        f'./run_browser.sh "{ozon_delivery_page_url}" {browser_profile_path}',
+        shell=True,
+        stdout=subprocess.PIPE,
+    )
     web_driver = prepare_webdriver(browser_profile_path)
     web_driver.get(ozon_delivery_page_url)
     delay()
@@ -524,10 +536,10 @@ def choose_delivery_date(driver, delay, google_credentials, table_name,
     return 'WAIT'
 
 
-def handle_statement(profile_path, delay_floor, delay_ceil,
-                     ozon_delivery_page_url, ozon_login_email, signin_url,
-                     yandex_email, yandex_password, account_name, sleep_time,
-                     google_spreadsheet_credentials, table_name,
+def handle_statement(profile_path, clean_browser_profile, delay_floor,
+                     delay_ceil, ozon_delivery_page_url, ozon_login_email,
+                     signin_url, yandex_email, yandex_password, account_name,
+                     sleep_time, google_spreadsheet_credentials, table_name,
                      requirements_sheet_name, storage_sheet_name):
     global STATE
     global web_driver
@@ -535,6 +547,7 @@ def handle_statement(profile_path, delay_floor, delay_ceil,
     states = {
         'START': partial(
             start,
+            clean_browser_profile=clean_browser_profile,
             browser_profile_path=profile_path,
             ozon_delivery_page_url=ozon_delivery_page_url,
         ),
@@ -585,24 +598,11 @@ def main():
         logger.setLevel(logging.INFO)
         ozon_login_email = os.environ['OZON_LOGIN_EMAIL']
         ozon_url = os.environ['START_URL']
-        browser_profile_path = os.environ['FIREFOX_PROFILE_PATH']
-        clean_browser_profile = os.environ['CLEAN_BROWSER_PROFILE_PATH']
-        subprocess.run(
-            f'pkill firefox; rm -rf {browser_profile_path}*;'
-            f'cp -r {clean_browser_profile}* {browser_profile_path}',
-            shell=True,
-            stdout=subprocess.PIPE,
-        )
-        subprocess.run(
-            f'./run_browser.sh "{ozon_url}" {browser_profile_path}',
-            shell=True,
-            stdout=subprocess.PIPE,
-        )
         global web_driver
-        # web_driver = prepare_webdriver(browser_profile_path)
         while True:
             handle_statement(
-                browser_profile_path,
+                os.environ['FIREFOX_PROFILE_PATH'],
+                os.environ['CLEAN_BROWSER_PROFILE_PATH'],
                 os.environ['ACTION_DELAY_FLOOR'],
                 os.environ['ACTION_DELAY_CEIL'],
                 ozon_url,
